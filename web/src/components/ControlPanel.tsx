@@ -1,0 +1,408 @@
+/**
+ * The interactive control panel (Figure 1, bottom): defense row, then attacks
+ * grouped by tier. Unaffordable / restricted actions are dimmed AND explain
+ * why; the server's availability is the source of truth.
+ */
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import {
+  ATTACKS,
+  ATTACK_IDS,
+  DEFENSES,
+  DEFENSE_IDS,
+  MULTI_TARGET_LIMIT,
+  getActionAvailability,
+  type ActionAvailability,
+  type AttackId,
+  type DefenseId,
+  type PlayerId,
+} from '../../../src/engine';
+import { useGameState, useSettings, useStore } from '../hooks';
+import type { Choice } from '../net/store';
+import { nameLookup } from '../state/reducer';
+
+const ATTACK_ICON: Record<AttackId, string> = {
+  GUN: '🔫',
+  KNIFE: '🔪',
+  GATLING_GUN: '⚙️',
+  FLAMETHROWER: '🔥',
+  AXE: '🪓',
+  THREE_HIT_COMBO: '👊',
+  GRENADE: '💣',
+  KATANA: '🗡️',
+  BOMB: '💥',
+  NUKE: '☢️',
+  MJOLNIR: '🔨',
+  BLACKHOLE: '🌀',
+};
+const DEFENSE_ICON: Record<DefenseId, string> = {
+  DODGE: '💨',
+  SHIELD: '🛡️',
+  REFLECT: '🪞',
+  DOUBLE_REFLECT: '🪞',
+  TRIPLE_REFLECT: '🪞',
+  QUAD_REFLECT: '🪞',
+};
+
+const TIERS: readonly { readonly label: string; readonly cost: number; readonly ids: readonly AttackId[] }[] = [
+  { label: 'TIER 1', cost: 1, ids: ['GUN', 'KNIFE'] },
+  { label: 'TIER 2', cost: 2, ids: ['GATLING_GUN', 'FLAMETHROWER', 'AXE'] },
+  { label: 'TIER 3', cost: 3, ids: ['THREE_HIT_COMBO', 'GRENADE', 'KATANA'] },
+  { label: 'TIER 4', cost: 4, ids: ['BOMB', 'NUKE', 'MJOLNIR'] },
+  { label: 'TIER 5', cost: 5, ids: ['BLACKHOLE'] },
+];
+
+export function reasonText(reason: string | null, cost: number, charge: number): string {
+  switch (reason) {
+    case 'UNAFFORDABLE':
+      return `Needs ${cost}⚡ — you have ${charge}⚡`;
+    case 'PHASE_RESTRICTED':
+      return 'Disabled: all defenses are off in Sudden Death';
+    case 'ATTACK_MANDATORY':
+      return 'Disabled: in Sudden Death you must attack when you can afford an attack';
+    case 'NOT_ALIVE':
+      return 'You are eliminated';
+    default:
+      return 'Unavailable';
+  }
+}
+
+type Selection = { readonly choice: Choice } | null;
+type Availability = { readonly available: boolean; readonly reason: string | null };
+
+interface ActionButtonProps {
+  readonly id: string;
+  readonly kind: string;
+  readonly row: number;
+  readonly label: string;
+  readonly cost: number;
+  readonly icon: string;
+  readonly enabled: boolean;
+  readonly selected: boolean;
+  /** Why the action is unavailable; empty when it is available. */
+  readonly why: string;
+  readonly onHint: (text: string) => void;
+  readonly onPick: () => void;
+}
+
+/**
+ * Stable top-level component: defining this inside ControlPanel would remount
+ * every button on each render and drop keyboard focus.
+ * Disabled actions use aria-disabled (not `disabled`) so keyboard and screen-reader
+ * users can still focus them and hear why they are unavailable.
+ */
+function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why, onHint, onPick }: ActionButtonProps) {
+  return (
+    <button
+      type="button"
+      data-action={id}
+      data-kind={kind}
+      data-row={row}
+      aria-disabled={!enabled}
+      aria-pressed={selected}
+      aria-describedby={why ? `why-${id}` : undefined}
+      title={why || undefined}
+      onFocus={() => onHint(why)}
+      onMouseEnter={() => onHint(why)}
+      onClick={() => {
+        if (enabled) {
+          onPick();
+          onHint('');
+        } else onHint(why);
+      }}
+      className={[
+        'bracket flex min-w-[7.5rem] items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold uppercase transition',
+        enabled ? 'border-danger bg-danger/10 text-ink hover:bg-danger/25' : 'cursor-not-allowed border-dashed border-edge text-ink-dim opacity-40 grayscale',
+        selected ? 'bg-gold/20 ring-2 ring-gold' : '',
+      ].join(' ')}
+    >
+      <span aria-hidden="true">{icon}</span>
+      <span>{label}</span>
+      <span className="text-gold">({cost}⚡)</span>
+      {selected && <span aria-hidden="true">✔</span>}
+      {why && (
+        <span id={`why-${id}`} className="sr-only">
+          {why}
+        </span>
+      )}
+    </button>
+  );
+}
+
+function targetsReady(choice: Choice, opponents: readonly PlayerId[]): boolean {
+  if (choice.kind !== 'ATTACK') return true;
+  const mode = ATTACKS[choice.weapon].targetMode;
+  if (mode === 'ALL_OPPONENTS') return true;
+  if (mode === 'SINGLE') return choice.targets.length === 1;
+  return choice.targets.length >= 1 && choice.targets.length <= Math.min(MULTI_TARGET_LIMIT, opponents.length);
+}
+
+export function ControlPanel() {
+  const state = useGameState();
+  const store = useStore();
+  const { keyboardMode } = useSettings();
+  const { game, session, stage, ownCommit, lockedPlayerIds, turn } = state;
+  const nameOf = nameLookup(state);
+  const me = session && game ? game.players[session.playerId] : undefined;
+
+  const [selection, setSelection] = useState<Selection>(null);
+  const [hint, setHint] = useState<string>('');
+  const [sending, setSending] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const opponents = useMemo(
+    () => (game ? game.series.lobby.filter((id) => id !== session?.playerId && game.players[id]?.alive) : []),
+    [game, session?.playerId],
+  );
+
+  // Server availability is authoritative; compute locally only until it arrives.
+  const availability: ActionAvailability | null = useMemo(() => {
+    if (state.availability) return state.availability;
+    if (game && game.turn && session && stage === 'COMMIT') return getActionAvailability(game, session.playerId);
+    return null;
+  }, [state.availability, game, session, stage]);
+
+  const locked = ownCommit !== null || (session ? lockedPlayerIds.includes(session.playerId) : false);
+  const open = stage === 'COMMIT' && !locked && !!me?.alive;
+
+  // A new turn starts with a clean slate.
+  useEffect(() => {
+    setSelection(null);
+    setHint('');
+  }, [turn?.turnId]);
+
+  const select = useCallback(
+    (choice: Choice) => {
+      if (choice.kind === 'ATTACK') {
+        const mode = ATTACKS[choice.weapon].targetMode;
+        if (mode === 'SINGLE' && opponents.length === 1) choice = { ...choice, targets: [opponents[0]!] };
+        if (mode === 'ALL_OPPONENTS') choice = { ...choice, targets: [] };
+      }
+      setSelection({ choice });
+    },
+    [opponents],
+  );
+
+  const toggleTarget = useCallback(
+    (id: PlayerId) => {
+      setSelection((current) => {
+        if (!current || current.choice.kind !== 'ATTACK') return current;
+        const { choice } = current;
+        const mode = ATTACKS[choice.weapon].targetMode;
+        const has = choice.targets.includes(id);
+        let targets: PlayerId[];
+        if (mode === 'SINGLE') targets = [id];
+        else if (has) targets = choice.targets.filter((t) => t !== id);
+        else targets = choice.targets.length >= MULTI_TARGET_LIMIT ? [...choice.targets] : [...choice.targets, id];
+        return { choice: { ...choice, targets } };
+      });
+    },
+    [],
+  );
+
+  const ready = selection !== null && targetsReady(selection.choice, opponents);
+
+  const lockIn = useCallback(async () => {
+    if (!selection || !targetsReady(selection.choice, opponents) || sending) return;
+    setSending(true);
+    try {
+      await store.commit(selection.choice);
+    } finally {
+      setSending(false);
+    }
+  }, [selection, opponents, sending, store]);
+
+  // ---- keyboard: single-key shortcuts (only when the user turned Keyboard mode on)
+  useEffect(() => {
+    if (!keyboardMode) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Escape') return setSelection(null);
+      if (!open) return;
+      const key = e.key.toLowerCase();
+      if (key === 'c' && availability?.charge.available) return select({ kind: 'CHARGE' });
+      if (key === 'l') {
+        e.preventDefault();
+        return void lockIn();
+      }
+      if (/^[1-8]$/.test(key)) {
+        const target = opponents[Number(key) - 1];
+        if (target) toggleTarget(target);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [keyboardMode, open, availability, select, lockIn, opponents, toggleTarget]);
+
+  // ---- arrow-key navigation across the whole action grid (a single composite widget)
+  const onGridKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    const keys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
+    if (!keys.includes(e.key)) return;
+    const buttons = [...(panelRef.current?.querySelectorAll<HTMLButtonElement>('button[data-action]') ?? [])];
+    const index = buttons.findIndex((b) => b === document.activeElement);
+    if (index < 0) return;
+    e.preventDefault();
+    const rowOf = (b: HTMLElement) => Number(b.dataset.row);
+    const row = rowOf(buttons[index]!);
+    const inRow = buttons.filter((b) => rowOf(b) === row);
+    const col = inRow.indexOf(buttons[index]!);
+    let next: HTMLButtonElement | undefined;
+    if (e.key === 'ArrowRight') next = buttons[Math.min(buttons.length - 1, index + 1)];
+    else if (e.key === 'ArrowLeft') next = buttons[Math.max(0, index - 1)];
+    else if (e.key === 'Home') next = buttons[0];
+    else if (e.key === 'End') next = buttons[buttons.length - 1];
+    else {
+      const targetRow = row + (e.key === 'ArrowDown' ? 1 : -1);
+      const candidates = buttons.filter((b) => rowOf(b) === targetRow);
+      next = candidates[Math.min(col, candidates.length - 1)];
+    }
+    next?.focus();
+  };
+
+  // ---------------------------------------------------------------- rendering
+
+  if (!me?.alive) {
+    return (
+      <section aria-labelledby="panel-h" className="neon-box rounded-2xl p-5">
+        <h2 id="panel-h" className="font-display text-neon">Your actions</h2>
+        <p className="mt-3 text-lg">
+          <span className="bracket font-bold text-danger">[ELIMINATED]</span> You are out for the rest of this round. You will return at the start of the next match — watch the log.
+        </p>
+      </section>
+    );
+  }
+
+  const charge = me.charge;
+  const selectedId = selection?.choice.kind === 'ATTACK' ? selection.choice.weapon : selection?.choice.kind === 'DEFENSE' ? selection.choice.defense : selection?.choice.kind;
+
+  const describe = (cost: number, a: Availability | undefined): string =>
+    !open ? (locked ? 'You are locked in for this turn' : 'Waiting for the next turn') : a && !a.available ? reasonText(a.reason, cost, charge) : '';
+
+  /** Props shared by every action button; identity-stable component below keeps focus across re-renders. */
+  const btn = (id: string, kind: string, row: number, label: string, cost: number, icon: string, a: Availability | undefined, onPick: () => void) => (
+    <ActionButton
+      key={id}
+      id={id}
+      kind={kind}
+      row={row}
+      label={label}
+      cost={cost}
+      icon={icon}
+      enabled={open && !!a?.available}
+      selected={selectedId === id && open}
+      why={describe(cost, a)}
+      onHint={setHint}
+      onPick={onPick}
+    />
+  );
+
+  return (
+    <section aria-labelledby="panel-h" className="neon-box rounded-2xl p-4" data-testid="control-panel">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="panel-h" className="font-display text-neon">
+          [ INTERACTIVE CONTROL PANEL — YOUR ACTION SELECTION ]
+        </h2>
+        <p className="bracket text-gold" data-testid="my-charge">
+          YOUR CHARGE: {charge}⚡
+        </p>
+      </div>
+
+      <div ref={panelRef} onKeyDown={onGridKeyDown} className="mt-3 space-y-3" role="group" aria-label="Action grid. Use arrow keys to move between actions.">
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Defensive actions and Charge">
+          {DEFENSE_IDS.map((id) =>
+            btn(id, 'defense', 0, DEFENSES[id].name, DEFENSES[id].cost, DEFENSE_ICON[id], availability?.defenses[id], () => select({ kind: 'DEFENSE', defense: id })),
+          )}
+          {btn('CHARGE', 'charge', 0, 'Charge +1', 0, '🔋', availability?.charge, () => select({ kind: 'CHARGE' }))}
+        </div>
+
+        {TIERS.map((tier, i) => (
+          <div key={tier.label} className="flex flex-wrap items-center gap-2" role="group" aria-label={`${tier.label}, ${tier.cost} charge`}>
+            <span className="bracket w-24 text-xs text-ink-dim">
+              {tier.label} ({tier.cost}⚡):
+            </span>
+            {tier.ids.map((id) =>
+              btn(id, 'attack', i + 1, ATTACKS[id].name, ATTACKS[id].cost, ATTACK_ICON[id], availability?.attacks[id], () => select({ kind: 'ATTACK', weapon: id, targets: [] })),
+            )}
+          </div>
+        ))}
+      </div>
+
+      <p role="status" aria-live="polite" data-testid="why-line" className="mt-3 min-h-6 text-sm text-gold">
+        {hint}
+      </p>
+
+      {/* Targets */}
+      {open && selection?.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode !== 'ALL_OPPONENTS' && (
+        <fieldset className="mt-3 rounded-lg border border-edge p-3" data-testid="target-picker">
+          <legend className="px-2 text-sm text-ink-dim">
+            {ATTACKS[selection.choice.weapon].targetMode === 'SINGLE'
+              ? `Choose 1 target for ${ATTACKS[selection.choice.weapon].name}`
+              : `Choose up to ${Math.min(MULTI_TARGET_LIMIT, opponents.length)} targets for ${ATTACKS[selection.choice.weapon].name}`}
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {opponents.map((id, i) => {
+              const on = selection.choice.kind === 'ATTACK' && selection.choice.targets.includes(id);
+              return (
+                <button key={id} type="button" aria-pressed={on} onClick={() => toggleTarget(id)} className={`bracket rounded-lg border px-3 py-2 ${on ? 'border-gold bg-gold/20 text-gold' : 'border-edge hover:bg-white/5'}`}>
+                  {keyboardMode && <span className="mr-1 text-ink-dim">{i + 1}</span>}
+                  {on ? '✔ ' : ''}
+                  {nameOf(id)}
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+      )}
+      {open && selection?.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode === 'ALL_OPPONENTS' && (
+        <p className="mt-3 text-sm text-ink-dim">
+          {ATTACKS[selection.choice.weapon].name} hits every opponent: {opponents.map(nameOf).join(', ')}.
+        </p>
+      )}
+
+      {/* Confirm / locked */}
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        {open ? (
+          <>
+            <button
+              type="button"
+              data-testid="lock-in"
+              aria-disabled={!ready || sending}
+              onClick={() => void lockIn()}
+              className={`rounded-lg px-6 py-3 font-black ${ready ? 'bg-ok text-void hover:brightness-110' : 'cursor-not-allowed bg-ok/25 text-ink-dim'}`}
+            >
+              {selection ? `LOCK IN: ${choiceLabel(selection.choice, nameOf)}` : 'LOCK IN'}
+            </button>
+            <p className="text-sm text-ink-dim">{selection ? (ready ? 'Nobody sees your choice until everyone locks in.' : 'Pick your target(s) to continue.') : 'Select an action first.'}</p>
+            <button type="button" onClick={() => setSelection(null)} disabled={!selection} className="rounded-lg border border-edge px-4 py-2 text-ink-dim enabled:hover:text-ink disabled:opacity-40">
+              Clear (Esc)
+            </button>
+          </>
+        ) : locked ? (
+          <p data-testid="locked-indicator" role="status" className="bracket rounded-lg border border-ok bg-ok/10 px-4 py-3 text-ok">
+            🔒 LOCKED{ownCommit ? `: ${choiceLabel(payloadToChoice(ownCommit), nameOf)}` : ''} — waiting for {Math.max(0, (turn?.eligiblePlayerIds.length ?? 0) - lockedPlayerIds.length)} more…
+          </p>
+        ) : (
+          <p className="text-ink-dim">{stage === 'BETWEEN_TURNS' ? 'Reveal in progress — the next turn opens shortly.' : 'Waiting for the next turn…'}</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function payloadToChoice(p: NonNullable<ReturnType<typeof useGameState>['ownCommit']>): Choice {
+  if (p.kind === 'CHARGE') return { kind: 'CHARGE' };
+  if (p.kind === 'DEFENSE') return { kind: 'DEFENSE', defense: p.defense! };
+  return { kind: 'ATTACK', weapon: p.weapon!, targets: p.targets ?? [] };
+}
+
+export function choiceLabel(choice: Choice, nameOf: (id: PlayerId) => string): string {
+  if (choice.kind === 'CHARGE') return 'Charge';
+  if (choice.kind === 'DEFENSE') return DEFENSES[choice.defense].name;
+  const name = ATTACKS[choice.weapon].name;
+  if (ATTACKS[choice.weapon].targetMode === 'ALL_OPPONENTS') return `${name} → all opponents`;
+  return choice.targets.length > 0 ? `${name} → ${choice.targets.map(nameOf).join(', ')}` : name;
+}
+
+/** Re-exported for tests. */
+export { ATTACK_IDS };

@@ -1,0 +1,37 @@
+import type { PlayerId } from '../../../src/engine';
+
+/** One avatar per seat, assigned by lobby order (Figure 1 uses a different character per seat). */
+const AVATARS = ['🤖', '🦊', '🐼', '🥷', '🐯', '👻', '🦅', '👾'] as const;
+const RINGS = ['#3ee6ff', '#ff9d3e', '#e6f0ff', '#b48cff', '#ffd54d', '#9db3d9', '#c98a4b', '#6dffa8'] as const;
+
+export const avatarFor = (seat: number): string => AVATARS[seat % AVATARS.length]!;
+export const ringFor = (seat: number): string => RINGS[seat % RINGS.length]!;
+
+interface AvatarProps {
+  readonly seat: number;
+  readonly eliminated: boolean;
+  readonly playerId: PlayerId;
+}
+
+/**
+ * Eliminated avatars are greyscale AND carry a crossed-out mark; the explicit
+ * "[ELIMINATED]" text label lives in the roster card (colour is never the only cue).
+ */
+export function Avatar({ seat, eliminated }: AvatarProps) {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative flex h-20 w-20 items-center justify-center rounded-full text-5xl"
+      style={{ border: `3px solid ${eliminated ? '#6b7280' : ringFor(seat)}`, background: 'rgb(5 8 22 / 0.7)' }}
+    >
+      <span className={eliminated ? 'opacity-60 grayscale' : ''} style={eliminated ? { filter: 'grayscale(1)' } : undefined}>
+        {avatarFor(seat)}
+      </span>
+      {eliminated && (
+        <span className="absolute inset-0 flex items-center justify-center text-6xl font-black text-white/80" style={{ textShadow: '0 0 6px #000' }}>
+          ✖
+        </span>
+      )}
+    </div>
+  );
+}

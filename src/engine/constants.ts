@@ -1,0 +1,21 @@
+/** Rule constants fixed by GDD v1.0.4. Nothing here is tunable at runtime. */
+
+export const RULES_VERSION = '1.0.4';
+export const MATRIX_VERSION = 'v2';
+
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 8;
+
+/** §3: Charge cap. A Charge action at the cap leaves the balance at the cap. */
+export const MAX_CHARGE = 5;
+
+/** §2: the first player to this many Match Wins wins the series. */
+export const SERIES_WIN_TARGET = 10;
+
+/** §9: consecutive no-elimination turns (two players alive) before Sudden Death. */
+export const SUDDEN_DEATH_AFTER = 10;
+/** §9: consecutive no-elimination turns (10 + 5 additional) before Overtime. */
+export const OVERTIME_AFTER = 15;
+
+/** §7: 3-hit Combo, Grenade and Katana select up to this many distinct opponents. */
+export const MULTI_TARGET_LIMIT = 3;

@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+@theme {
+  --color-void: #050816;
+  --color-panel: #0a1128;
+  --color-panel-2: #101a3a;
+  --color-edge: #24407a;
+  --color-neon: #3ee6ff;
+  --color-neon-pink: #ff5cdc;
+  --color-gold: #ffd54d;
+  --color-danger: #ff7b7b;
+  --color-ok: #6dffa8;
+  --color-ink: #e6f0ff;
+  --color-ink-dim: #9db3d9;
+  --font-display: "Orbitron", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #12286b 0%, transparent 60%),
+    radial-gradient(900px 500px at 100% 100%, #3b0f55 0%, transparent 55%),
+    var(--color-void);
+  color: var(--color-ink);
+  font-family: system-ui, "Segoe UI", sans-serif;
+}
+
+/* Always-visible, high-contrast keyboard focus. */
+:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.neon-box {
+  border: 1px solid var(--color-edge);
+  background: linear-gradient(180deg, rgb(16 26 58 / 0.85), rgb(10 17 40 / 0.9));
+  box-shadow: 0 0 0 1px rgb(62 230 255 / 0.08), 0 0 24px rgb(62 230 255 / 0.08);
+}
+
+.bracket {
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+/* ---- animations (all disabled by the reduced-motion setting) ---- */
+@keyframes pop-in {
+  0% { transform: translateY(6px) scale(0.85); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes ko-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px) rotate(-2deg); }
+  40% { transform: translateX(4px) rotate(2deg); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+@keyframes pulse-edge {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(255 213 77 / 0.5); }
+  50% { box-shadow: 0 0 0 6px rgb(255 213 77 / 0); }
+}
+@keyframes line-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  10% { transform: translate(-3px, -3px); }
+  20% { transform: translate(3px, 2px); }
+  30% { transform: translate(-2px, 3px); }
+  40% { transform: translate(2px, -2px); }
+  50% { transform: translate(-3px, 2px); }
+  60% { transform: translate(3px, -3px); }
+  70% { transform: translate(-2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  90% { transform: translate(-1px, 1px); }
+}
+
+@keyframes vortex {
+  0% { transform: scale(1) rotate(0deg); opacity: 1; }
+  50% { transform: scale(1.2) rotate(180deg); opacity: 0.8; }
+  100% { transform: scale(1) rotate(360deg); opacity: 1; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { filter: brightness(1) drop-shadow(0 0 4px rgba(62, 230, 255, 0.3)); }
+  50% { filter: brightness(1.3) drop-shadow(0 0 16px rgba(62, 230, 255, 0.8)); }
+}
+
+/* [BLOCKED] outcome: the check pops with a small spring overshoot while the text slides in. Plays once. */
+@keyframes block-icon-pop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes block-text-in {
+  from { opacity: 0; transform: translateX(-14px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* Turn Resolution battlefield. Every card runs on the same clock (delays are set inline) so all
+   actions play in parallel. All finite; each element's resting state is the finished picture. */
+@keyframes bf-fly {
+  0% { transform: translateX(-2.75rem) scale(0.7); opacity: 0; }
+  70% { transform: translateX(0.25rem) scale(1.15); opacity: 1; }
+  100% { transform: translateX(0) scale(1); opacity: 1; }
+}
+@keyframes bf-lunge {
+  0%, 100% { transform: translateX(0); }
+  45% { transform: translateX(0.9rem) scale(1.15); }
+}
+@keyframes bf-impact {
+  0% { transform: scale(1); filter: brightness(1); }
+  35% { transform: scale(1.4); filter: brightness(2.2) drop-shadow(0 0 12px #fff); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+@keyframes bf-charge {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 213, 77, 0)); }
+  50% { transform: scale(1.3); filter: drop-shadow(0 0 14px rgba(255, 213, 77, 0.95)); }
+}
+@keyframes bf-result {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes bf-grey {
+  from { filter: grayscale(0); }
+  to { filter: grayscale(1); }
+}
+.anim-bf-fly { animation: bf-fly 420ms ease-out both; }
+.anim-bf-lunge { display: inline-block; animation: bf-lunge 450ms ease-in-out both; }
+.anim-bf-impact { display: inline-block; animation: bf-impact 380ms ease-out both; }
+.anim-bf-charge { display: inline-block; animation: bf-charge 700ms ease-in-out 2 both; }
+.anim-bf-result { animation: bf-result 340ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.anim-bf-grey { animation: bf-grey 400ms ease-out both; }
+
+.anim-pop { animation: pop-in 320ms ease-out both; }
+.anim-ko { animation: ko-shake 480ms ease-in-out both; }
+.anim-pulse { animation: pulse-edge 1.6s ease-in-out infinite; }
+.anim-line { animation: line-in 220ms ease-out both; }
+.anim-block-icon { display: inline-block; animation: block-icon-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.anim-block-text { animation: block-text-in 300ms ease-out both; }
+.anim-screen-shake { animation: screen-shake 600ms ease-in-out both; }
+.anim-vortex { animation: vortex 800ms ease-in-out both; }
+.anim-pulse-glow { animation: pulse-glow 600ms ease-in-out both; }
+
+:root[data-reduced-motion="true"] *,
+:root[data-reduced-motion="true"] *::before,
+:root[data-reduced-motion="true"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

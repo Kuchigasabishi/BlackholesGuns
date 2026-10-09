@@ -11,6 +11,8 @@ export const MAX_CHARGE = 5;
 
 /** §2: the first player to this many Match Wins wins the series. */
 export const SERIES_WIN_TARGET = 10;
+/** The host-selectable series targets; `SERIES_WIN_TARGET` is the default. */
+export const SERIES_WIN_TARGET_OPTIONS = [3, 5, 10] as const;
 
 /** §9: consecutive no-elimination turns (two players alive) before Sudden Death. */
 export const SUDDEN_DEATH_AFTER = 10;

@@ -1,5 +1,5 @@
 /** Construction of series / match / round / turn state (§2, §15). */
-import { MATRIX_VERSION, MAX_PLAYERS, MIN_PLAYERS, RULES_VERSION } from './constants';
+import { MATRIX_VERSION, MAX_PLAYERS, MIN_PLAYERS, RULES_VERSION, SERIES_WIN_TARGET, SERIES_WIN_TARGET_OPTIONS } from './constants';
 import { EngineError } from './errors';
 import { deepFreeze } from './freeze';
 import { phaseFor } from './phase';
@@ -99,11 +99,16 @@ export interface CreateSeriesConfig {
   readonly seriesId: string;
   /** 2-8 distinct player ids, in seat order. */
   readonly playerIds: readonly PlayerId[];
+  /** Match Wins needed to win the series; defaults to `SERIES_WIN_TARGET`. */
+  readonly seriesWinTarget?: number;
 }
 
 /** §2: begins a series with the full lobby alive, first round at 0 Charge, Normal Phase. */
 export function createSeries(config: CreateSeriesConfig): GameState {
-  const { seriesId, playerIds } = config;
+  const { seriesId, playerIds, seriesWinTarget = SERIES_WIN_TARGET } = config;
+  if (!(SERIES_WIN_TARGET_OPTIONS as readonly number[]).includes(seriesWinTarget)) {
+    throw new EngineError('INVALID_LOBBY', `Series win target must be one of ${SERIES_WIN_TARGET_OPTIONS.join(', ')}, got ${seriesWinTarget}`);
+  }
   if (playerIds.length < MIN_PLAYERS || playerIds.length > MAX_PLAYERS) {
     throw new EngineError('INVALID_LOBBY', `Lobby must have ${MIN_PLAYERS}-${MAX_PLAYERS} players, got ${playerIds.length}`);
   }
@@ -121,6 +126,7 @@ export function createSeries(config: CreateSeriesConfig): GameState {
     lobby: [...playerIds],
     status: 'IN_PROGRESS',
     matchWins,
+    seriesWinTarget,
     currentMatchId: matchIdOf(seriesId, 1),
     matchIndex: 1,
     winnerId: null,

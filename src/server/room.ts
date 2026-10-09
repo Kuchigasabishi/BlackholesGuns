@@ -13,6 +13,8 @@ import {
   MIN_PLAYERS,
   createSeededRng,
   createSeries,
+  SERIES_WIN_TARGET,
+  SERIES_WIN_TARGET_OPTIONS,
   getActionAvailability,
   lockTurn,
   resolveTurn,
@@ -182,6 +184,19 @@ export class Room {
 
   // ------------------------------------------------------------------ lobby
 
+  /** Match Wins needed to win the series. Host-editable only while in the lobby. */
+  seriesWinTarget: number = SERIES_WIN_TARGET;
+
+  setSeriesWinTarget(playerId: PlayerId, target: unknown): void {
+    if (this.status !== 'LOBBY') throw new RoomError('GAME_STARTED', 'The series target is locked once the game starts');
+    if (playerId !== this.hostId) throw new RoomError('NOT_HOST', 'Only the host can change the series target');
+    if (typeof target !== 'number' || !(SERIES_WIN_TARGET_OPTIONS as readonly number[]).includes(target)) {
+      throw new RoomError('BAD_PAYLOAD', `Series target must be one of ${SERIES_WIN_TARGET_OPTIONS.join(', ')}`);
+    }
+    this.seriesWinTarget = target;
+    this.deps.emitter.toRoom(ServerEvents.lobbyUpdate, this.lobbyView());
+  }
+
   lobbyView(): LobbyView {
     return {
       roomCode: this.code,
@@ -190,6 +205,7 @@ export class Room {
       hostId: this.hostId,
       minPlayers: MIN_PLAYERS,
       maxPlayers: MAX_PLAYERS,
+      seriesWinTarget: this.seriesWinTarget,
       players: [...this.members.values()].map((m) => ({
         playerId: m.playerId,
         displayName: m.displayName,
@@ -298,6 +314,7 @@ export class Room {
     this.game = createSeries({
       seriesId: `${this.code}-${randomBytes(3).toString('hex')}`,
       playerIds: [...this.members.keys()],
+      seriesWinTarget: this.seriesWinTarget,
     });
     for (const m of this.members.values()) {
       if (!m.connected) this.game = setConnectionStatus(this.game, m.playerId, 'DISCONNECTED');

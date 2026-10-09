@@ -48,6 +48,21 @@ describe('Lobby screen', () => {
     return stubStore(s);
   };
 
+  it('lets only the host change the Series Win Target (3 / 5 / 10, default 10)', async () => {
+    const store = lobbyStore(2);
+    mount(<LobbyScreen />, store);
+    const select = screen.getByTestId('series-target') as HTMLSelectElement;
+    expect(select.value).toBe('10');
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['3 Wins', '5 Wins', '10 Wins (default)']);
+    await userEvent.setup().selectOptions(select, '5');
+    expect(store.targets).toEqual([5]);
+  });
+
+  it('disables the Series Win Target for guests', () => {
+    mount(<LobbyScreen />, lobbyStore(2, 'p1', 'p2'));
+    expect((screen.getByTestId('series-target') as HTMLSelectElement).disabled).toBe(true);
+  });
+
   it('shows the room code, the canonical invite link and an 8-slot waiting roster', () => {
     mount(<LobbyScreen />, lobbyStore(3));
     expect(screen.getByTestId('room-code').textContent).toBe('K7M2QP');
@@ -717,14 +732,14 @@ describe('Match Results & Series Standings modal', () => {
     const game = withCharges(newGame(2), { p1: 1, p2: 1 });
     const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
     const s = reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result });
-    const store = stubStore({ ...s, game: { ...s.game!, series: { ...s.game!.series, matchWins: { p1: 4, p2: 2 } } } });
+    const store = stubStore({ ...s, game: { ...s.game!, series: { ...s.game!.series, seriesWinTarget: 5, matchWins: { p1: 4, p2: 2 } } } });
     mount(<TurnResolutionModal />, store);
     const user = userEvent.setup();
     await user.click(screen.getByTestId('tr-next'));
     const dialog = screen.getByRole('dialog', { name: /MATCH RESULTS/ });
     expect(within(dialog).getByTestId('mr-standings').textContent).toMatch(/1st: Ada.*4 Wins.*2nd: Bo.*2 Wins/);
     expect(within(dialog).getByTestId('mr-row-p1').getAttribute('data-match-winner')).toBe('true');
-    expect(within(dialog).getByTestId('mr-leader-line').textContent).toContain('Ada is leading the series and needs 6 more wins to win the series!');
+    expect(within(dialog).getByTestId('mr-leader-line').textContent).toContain('Ada is leading the series and needs 1 more win to win the series!');
     await user.click(within(dialog).getByTestId('mr-start'));
     expect(screen.queryByRole('dialog')).toBeNull();
   });

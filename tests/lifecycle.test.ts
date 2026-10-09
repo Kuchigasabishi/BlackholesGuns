@@ -213,3 +213,21 @@ describe('server-facing state helpers', () => {
     expect(state.series.matchWins.p1).toBe(4);
   });
 });
+
+describe('configurable series win target', () => {
+  it('rejects targets outside 3 / 5 / 10', () => {
+    expect(() => createSeries({ seriesId: 's', playerIds: ['p1', 'p2'], seriesWinTarget: 7 })).toThrow();
+  });
+
+  it('defaults to 10 and ends the series at the configured target instead', () => {
+    expect(newGame(2).series.seriesWinTarget).toBe(10);
+    let state = createSeries({ seriesId: 's', playerIds: ['p1', 'p2'], seriesWinTarget: 3 });
+    expect(state.series.seriesWinTarget).toBe(3);
+    state = winMatch(state, 'p1', 'p2');
+    state = winMatch(state, 'p1', 'p2');
+    expect(state.series.status).toBe('IN_PROGRESS');
+    const result = play(withCharges(state, { p1: 1 }), attack('p1', 'GUN', 'p2'), charge('p2'));
+    expect(result.outcome).toMatchObject({ transition: 'SERIES_ENDED', seriesWinnerId: 'p1' });
+    expect(result.nextState.series.matchWins.p1).toBe(3);
+  });
+});

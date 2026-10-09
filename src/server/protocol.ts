@@ -16,6 +16,8 @@ export const ClientEvents = {
   join: 'lobby:join',
   resume: 'session:resume',
   leave: 'lobby:leave',
+  /** Host only, lobby only: choose the Series Win Target. */
+  setSeriesTarget: 'lobby:setSeriesTarget',
   start: 'game:start',
   commit: 'action:commit',
 } as const;
@@ -68,6 +70,8 @@ export interface LobbyView {
   readonly hostId: PlayerId | null;
   readonly minPlayers: number;
   readonly maxPlayers: number;
+  /** Match Wins needed to win the series; host-editable until the game starts. */
+  readonly seriesWinTarget: number;
   readonly players: readonly { readonly playerId: PlayerId; readonly displayName: string; readonly connected: boolean }[];
 }
 

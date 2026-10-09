@@ -56,6 +56,7 @@ export function TopBar() {
           [ YOUR STATUS: {BADGE_TEXT[badge]} ]
         </li>
         <li className={chip}>[ ALIVE: {alive} ]</li>
+        <li className={chip} data-testid="series-target-chip">[ FIRST TO: {game.series.seriesWinTarget} WINS ]</li>
       </ul>
       {toSuddenDeath !== null && (
         <p className="mt-2 text-sm text-ink-dim" data-testid="sd-countdown">
@@ -145,7 +146,7 @@ export function Roster() {
                 {isOwn && <span className="bracket ml-1 text-xs text-gold">[YOU]</span>}
               </p>
               <p className={`bracket text-sm ${isOwn ? 'text-gold' : 'text-ink-dim'}`} title={isOwn ? undefined : "Opponents' Charge is hidden"}>
-                ⚡ {chargeDisplay} · 🏆 {p.matchWins}
+                ⚡ {chargeDisplay} · 🏆 {p.matchWins}/{game.series.seriesWinTarget}
               </p>
               <p className={`bracket mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`}>
                 <span aria-hidden="true">{BADGE_ICON[badge]} </span>

@@ -8,7 +8,7 @@
  */
 import { ATTACKS } from './catalog';
 import { resolveAttackPair } from './collision';
-import { MAX_CHARGE, SERIES_WIN_TARGET } from './constants';
+import { MAX_CHARGE } from './constants';
 import { EngineError } from './errors';
 import { deepFreeze } from './freeze';
 import { actionCost, resolveEffectTargets, validateAction } from './legality';
@@ -125,7 +125,7 @@ function assertResolvable(state: GameState, living: readonly PlayerId[], locked:
  *  - no elimination: the next turn opens, streak + 1, phase re-evaluated;
  *  - elimination, 2+ survivors: new round, survivors at 0 Charge;
  *  - elimination, 1 survivor: that player earns a Match Win; at
- *    SERIES_WIN_TARGET the series ends, otherwise a new match starts with the
+ *    `series.seriesWinTarget` the series ends, otherwise a new match starts with the
  *    full lobby;
  *  - elimination, 0 survivors: the GDD does not define this case (it only
  *    arises with 3+ players). The engine voids the round and restarts it with
@@ -256,7 +256,7 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
   const winnerId = survivorIds[0]!;
   const matchWins = { ...state.series.matchWins, [winnerId]: (state.series.matchWins[winnerId] ?? 0) + 1 };
 
-  if (matchWins[winnerId]! >= SERIES_WIN_TARGET) {
+  if (matchWins[winnerId]! >= state.series.seriesWinTarget) {
     const players: Record<PlayerId, PlayerState> = {};
     for (const id of state.series.lobby) {
       const before = state.players[id]!;

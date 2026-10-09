@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { SERIES_WIN_TARGET } from '../../../src/engine';
 import { trapTab } from '../a11y';
 import { useGameState } from '../hooks';
 import { nameLookup } from '../state/reducer';
@@ -44,7 +43,8 @@ export function MatchResultsModal() {
 
   const topWins = wins[ranked[0]!] ?? 0;
   const leaders = ranked.filter((id) => (wins[id] ?? 0) === topWins);
-  const needed = Math.max(0, SERIES_WIN_TARGET - topWins);
+  const target = game.series.seriesWinTarget;
+  const needed = Math.max(0, target - topWins);
   const leaderLine =
     leaders.length === 1
       ? `${nameOf(leaders[0]!)} is leading the series and needs ${plural(needed, 'more win')} to win the series!`
@@ -80,7 +80,7 @@ export function MatchResultsModal() {
         </div>
 
         <div className="space-y-3 overflow-y-auto px-4 py-4 sm:px-6">
-          <ol className="space-y-2" data-testid="mr-standings" aria-label={`Series standings, first to ${SERIES_WIN_TARGET} Match Wins`}>
+          <ol className="space-y-2" data-testid="mr-standings" aria-label={`Series standings, first to ${target} Match Wins`}>
             {ranked.map((id, i) => {
               const justWon = id === winnerId;
               const isLeader = (wins[id] ?? 0) === topWins;

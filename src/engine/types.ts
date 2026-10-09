@@ -30,6 +30,8 @@ export interface Series {
   readonly currentMatchId: string;
   /** 1-based. */
   readonly matchIndex: number;
+  /** Match Wins needed to win the series (host-configured before the series starts, then fixed). */
+  readonly seriesWinTarget: number;
   /** Set once a player reaches the series win target. */
   readonly winnerId: PlayerId | null;
 }

@@ -11,6 +11,7 @@ import {
   MIN_PLAYERS,
   OVERTIME_AFTER,
   SERIES_WIN_TARGET,
+  SERIES_WIN_TARGET_OPTIONS,
   SUDDEN_DEATH_AFTER,
   matrixCellEffect,
   type MatrixEffect,
@@ -97,7 +98,7 @@ function Content() {
             {MIN_PLAYERS}–{MAX_PLAYERS} players. Be the <strong>last player standing</strong> to win a match (+1 Match Win).
           </li>
           <li>
-            First to <strong>{SERIES_WIN_TARGET} Match Wins</strong> wins the series.
+            First to the lobby's <strong>Series Win Target</strong> ({SERIES_WIN_TARGET_OPTIONS.join(', ')} Match Wins; the host picks, default {SERIES_WIN_TARGET}) wins the series.
           </li>
         </ul>
       </Section>

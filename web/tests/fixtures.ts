@@ -29,6 +29,7 @@ export function lobbyView(n: number, opts: { hostId?: PlayerId | null; status?: 
     hostId: opts.hostId === undefined ? 'p1' : opts.hostId,
     minPlayers: 2,
     maxPlayers: 8,
+    seriesWinTarget: 10,
     players: ids(n).map((id, i) => ({ playerId: id, displayName: NAMES[i]!, connected: !(opts.offline ?? []).includes(id) })),
   };
 }
@@ -117,6 +118,7 @@ export function clientStateFor(game: GameState, playerId: PlayerId, over: Parame
 export interface StubStore extends GameStore {
   readonly commits: unknown[];
   readonly started: number;
+  readonly targets: number[];
   set(state: ClientState): void;
 }
 
@@ -129,9 +131,11 @@ export function stubStore(initial: ClientState = initialState): StubStore {
   base.dispose();
   const commits: unknown[] = [];
   let started = 0;
+  const targets: number[] = [];
   const store: StubStore = {
     ...base,
     commits,
+    targets,
     get started() {
       return started;
     },
@@ -154,6 +158,10 @@ export function stubStore(initial: ClientState = initialState): StubStore {
       const action: ActionPayload =
         choice.kind === 'CHARGE' ? { kind: 'CHARGE' } : choice.kind === 'DEFENSE' ? { kind: 'DEFENSE', defense: choice.defense } : { kind: 'ATTACK', weapon: choice.weapon, targets: [...choice.targets] };
       store.dispatch({ type: 'committed', turnId, action });
+      return true;
+    },
+    async setSeriesTarget(target: number) {
+      targets.push(target);
       return true;
     },
     async startGame() {

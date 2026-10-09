@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { SERIES_WIN_TARGET, SERIES_WIN_TARGET_OPTIONS } from '../../../src/engine';
 import { Avatar } from '../components/Avatar';
 import { useGameState, useStore } from '../hooks';
 
@@ -109,6 +110,29 @@ export function LobbyScreen() {
           <span className="bracket font-bold">[ERROR]</span> {error}
         </p>
       )}
+
+      <section className="mt-8" aria-labelledby="target-h">
+        <label id="target-h" htmlFor="series-target" className="font-display text-xl text-neon-pink">
+          Series Win Target
+        </label>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <select
+            id="series-target"
+            data-testid="series-target"
+            value={lobby.seriesWinTarget}
+            disabled={!isHost}
+            onChange={(e) => void store.setSeriesTarget(Number(e.target.value))}
+            className="rounded-lg border border-edge bg-void px-3 py-2 text-ink disabled:opacity-60"
+          >
+            {SERIES_WIN_TARGET_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n} Wins{n === SERIES_WIN_TARGET ? ' (default)' : ''}
+              </option>
+            ))}
+          </select>
+          <p className="text-sm text-ink-dim">{isHost ? 'First player to this many Match Wins wins the series. Locked once you start.' : `The host set this to ${lobby.seriesWinTarget} Match Wins.`}</p>
+        </div>
+      </section>
 
       <div className="mt-8 flex flex-wrap items-center gap-4">
         {isHost ? (

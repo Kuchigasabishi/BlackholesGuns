@@ -164,3 +164,23 @@ describe('HTTP surface', () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe('Series Win Target setting', () => {
+  it('defaults to 10; only the host can change it; everyone is told; it locks at start', async () => {
+    const run = await startServer();
+    const host = await TestClient.connect(run.url);
+    await host.create('Host');
+    const guest = await TestClient.connect(run.url);
+    await guest.join(host.roomCode, 'Guest');
+    expect(run.server.rooms.get(host.roomCode)!.lobbyView().seriesWinTarget).toBe(10);
+
+    expect((await guest.emit('lobby:setSeriesTarget', { target: 3 })) as any).toMatchObject({ ok: false, code: 'NOT_HOST' });
+    expect((await host.emit('lobby:setSeriesTarget', { target: 7 })) as any).toMatchObject({ ok: false, code: 'BAD_PAYLOAD' });
+    expect((await host.emit('lobby:setSeriesTarget', { target: 5 })) as any).toMatchObject({ ok: true });
+    expect(run.server.rooms.get(host.roomCode)!.lobbyView().seriesWinTarget).toBe(5);
+
+    expect((await host.emit('game:start')) as any).toMatchObject({ ok: true });
+    expect((await host.emit('lobby:setSeriesTarget', { target: 3 })) as any).toMatchObject({ ok: false, code: 'GAME_STARTED' });
+    expect((run.server.rooms.get(host.roomCode) as any).game.series.seriesWinTarget).toBe(5);
+  });
+});

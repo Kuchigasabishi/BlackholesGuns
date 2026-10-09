@@ -42,6 +42,7 @@ export interface GameStore {
   dispatch(action: ClientAction): void;
   createRoom(displayName: string): Promise<boolean>;
   joinRoom(roomCodeOrLink: string, displayName: string): Promise<boolean>;
+  setSeriesTarget(target: number): Promise<boolean>;
   startGame(): Promise<boolean>;
   leaveRoom(): Promise<void>;
   commit(choice: Choice): Promise<boolean>;
@@ -182,6 +183,12 @@ export function createGameStore(options: StoreOptions = {}): GameStore {
     async joinRoom(roomCodeOrLink, displayName) {
       dispatch({ type: 'error', message: null });
       return enterRoom(await request(ClientEvents.join, { roomCode: roomCodeOrLink, displayName }));
+    },
+
+    async setSeriesTarget(target) {
+      const ack = await request(ClientEvents.setSeriesTarget, { target });
+      if (!ack.ok) dispatch({ type: 'error', message: messageFor(ack.code, ack.message) });
+      return ack.ok;
     },
 
     async startGame() {

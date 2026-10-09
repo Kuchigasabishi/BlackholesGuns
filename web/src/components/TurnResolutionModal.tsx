@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { trapTab } from '../a11y';
 import { Battlefield } from './Battlefield';
+import { MatchResultsModal } from './MatchResultsModal';
 import { describeResolution, type OutcomeTag } from '../format/describeTurn';
 import { useGameState, useSettings, useStore } from '../hooks';
 import { nameLookup } from '../state/reducer';
@@ -53,7 +54,8 @@ export function TurnResolutionModal() {
     return () => document.getElementById('action-panel')?.focus();
   }, [visible, turnId]);
 
-  if (!visible || !game) return null;
+  // Once the turn breakdown is closed (or the next turn opened), a match end shows the series standings.
+  if (!visible || !game) return <MatchResultsModal />;
   const nameOf = nameLookup(state);
   const outcome = showTurn ? lastResult.outcome : null;
   const breakdown = showTurn ? describeResolution(lastResult, nameOf) : null;

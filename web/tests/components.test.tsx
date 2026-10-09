@@ -711,3 +711,21 @@ describe('Turn Resolution: [BLOCKED] micro-animation', () => {
     expect(css).toMatch(/prefers-reduced-motion: reduce[\s\S]*animation: none !important/);
   });
 });
+
+describe('Match Results & Series Standings modal', () => {
+  it('opens after the turn modal with sorted standings, leader line and Start Next Match', async () => {
+    const game = withCharges(newGame(2), { p1: 1, p2: 1 });
+    const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
+    const s = reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result });
+    const store = stubStore({ ...s, game: { ...s.game!, series: { ...s.game!.series, matchWins: { p1: 4, p2: 2 } } } });
+    mount(<TurnResolutionModal />, store);
+    const user = userEvent.setup();
+    await user.click(screen.getByTestId('tr-next'));
+    const dialog = screen.getByRole('dialog', { name: /MATCH RESULTS/ });
+    expect(within(dialog).getByTestId('mr-standings').textContent).toMatch(/1st: Ada.*4 Wins.*2nd: Bo.*2 Wins/);
+    expect(within(dialog).getByTestId('mr-row-p1').getAttribute('data-match-winner')).toBe('true');
+    expect(within(dialog).getByTestId('mr-leader-line').textContent).toContain('Ada is leading the series and needs 6 more wins to win the series!');
+    await user.click(within(dialog).getByTestId('mr-start'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});

@@ -43,11 +43,11 @@ const DEFENSE_ICON: Record<DefenseId, string> = {
   QUAD_REFLECT: '🪞',
 };
 
-const TIERS: readonly { readonly label: string; readonly cost: number; readonly ids: readonly AttackId[] }[] = [
-  { label: 'TIER 1', cost: 1, ids: ['GUN', 'KNIFE'] },
-  { label: 'TIER 2', cost: 2, ids: ['GATLING_GUN', 'FLAMETHROWER', 'AXE'] },
-  { label: 'TIER 3', cost: 3, ids: ['THREE_HIT_COMBO', 'GRENADE', 'KATANA'] },
-  { label: 'TIER 4', cost: 4, ids: ['BOMB', 'NUKE', 'MJOLNIR'] },
+const TIERS: readonly { readonly label: string; readonly cost: number; readonly ids: readonly AttackId[]; readonly reflect?: DefenseId }[] = [
+  { label: 'TIER 1', cost: 1, ids: ['GUN', 'KNIFE'], reflect: 'REFLECT' },
+  { label: 'TIER 2', cost: 2, ids: ['GATLING_GUN', 'FLAMETHROWER', 'AXE'], reflect: 'DOUBLE_REFLECT' },
+  { label: 'TIER 3', cost: 3, ids: ['THREE_HIT_COMBO', 'GRENADE', 'KATANA'], reflect: 'TRIPLE_REFLECT' },
+  { label: 'TIER 4', cost: 4, ids: ['BOMB', 'NUKE', 'MJOLNIR'], reflect: 'QUAD_REFLECT' },
   { label: 'TIER 5', cost: 5, ids: ['BLACKHOLE'] },
 ];
 
@@ -310,7 +310,7 @@ export function ControlPanel() {
 
       <div ref={panelRef} onKeyDown={onGridKeyDown} className="mt-3 space-y-3" role="group" aria-label="Action grid. Use arrow keys to move between actions.">
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Defensive actions and Charge">
-          {DEFENSE_IDS.map((id) =>
+          {DEFENSE_IDS.filter((id) => DEFENSES[id].cost === 0).map((id) =>
             btn(id, 'defense', 0, DEFENSES[id].name, DEFENSES[id].cost, DEFENSE_ICON[id], availability?.defenses[id], () => select({ kind: 'DEFENSE', defense: id })),
           )}
           {btn('CHARGE', 'charge', 0, 'Charge +1', 0, '🔋', availability?.charge, () => select({ kind: 'CHARGE' }))}
@@ -324,6 +324,8 @@ export function ControlPanel() {
             {tier.ids.map((id) =>
               btn(id, 'attack', i + 1, ATTACKS[id].name, ATTACKS[id].cost, ATTACK_ICON[id], availability?.attacks[id], () => select({ kind: 'ATTACK', weapon: id, targets: [] })),
             )}
+            {tier.reflect &&
+              btn(tier.reflect, 'defense', i + 1, DEFENSES[tier.reflect].name, DEFENSES[tier.reflect].cost, DEFENSE_ICON[tier.reflect], availability?.defenses[tier.reflect], () => select({ kind: 'DEFENSE', defense: tier.reflect! }))}
           </div>
         ))}
       </div>

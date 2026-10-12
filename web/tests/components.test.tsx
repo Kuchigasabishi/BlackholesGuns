@@ -9,9 +9,9 @@ import { EventLog } from '../src/components/EventLog';
 import { ControlPanel } from '../src/components/ControlPanel';
 import { StoreProvider, SettingsProvider } from '../src/hooks';
 import { LobbyScreen } from '../src/screens/Lobby';
-import { TurnResolutionModal } from '../src/components/TurnResolutionModal';
+import { MatchResultsModal } from '../src/components/MatchResultsModal';
 import { GameScreen, PhaseNotice, Roster, TopBar } from '../src/screens/Game';
-import { initialState, reducer } from '../src/state/reducer';
+import { initialState, reducer, screenOf } from '../src/state/reducer';
 import { CHARGE, attack, clientStateFor, defend, lobbyView, newGame, resultFor, stubStore, withCharges, withStreak, type StubStore } from './fixtures';
 
 beforeEach(() => {
@@ -137,6 +137,22 @@ describe('Control panel: names, costs and affordability (Figure 1)', () => {
       expect(button(id).textContent).toContain(`(${DEFENSES[id].cost}⚡)`);
     }
     expect(DEFENSE_IDS.map((id) => DEFENSES[id].name)).toEqual(['Dodge', 'Shield', 'Reflect', 'Double Reflect', 'Triple Reflect', 'Quad Reflect']);
+  });
+
+  it('keeps only the 0-cost defenses on the top row and nests each Reflect in its matching tier group', () => {
+    mount(<ControlPanel />, inGame(2, 1).store);
+    const top = screen.getByRole('group', { name: 'Defensive actions and Charge' });
+    expect(within(top).queryByRole('button', { name: /Reflect/ })).toBeNull();
+    expect(within(top).getByRole('button', { name: /Dodge/ })).toBeTruthy();
+    expect(within(top).getByRole('button', { name: /Shield/ })).toBeTruthy();
+    const tiers: [string, string][] = [['TIER 1', 'REFLECT'], ['TIER 2', 'DOUBLE_REFLECT'], ['TIER 3', 'TRIPLE_REFLECT'], ['TIER 4', 'QUAD_REFLECT']];
+    for (const [tier, name] of tiers) {
+      const group = screen.getByRole('group', { name: new RegExp(`^${tier},`) });
+      expect(group.contains(button(name))).toBe(true);
+    }
+    // Still cost-gated: with 1 Charge, Reflect is enabled and Double Reflect is not.
+    expect(button('REFLECT').getAttribute('aria-disabled')).not.toBe('true');
+    expect(button('DOUBLE_REFLECT').getAttribute('aria-disabled')).toBe('true');
   });
 
   it('lists all 12 attacks grouped by tier with their costs', () => {
@@ -609,138 +625,33 @@ describe('Charge fog of war (§12)', () => {
   });
 });
 
-describe('Turn Resolution modal', () => {
-  const resolved = (game: ReturnType<typeof newGame>, actions: Parameters<typeof resultFor>[1], viewer = 'p1') => {
-    const result = resultFor(game, actions);
-    return reducer(clientStateFor(game, viewer), { type: 'result', payload: result });
-  };
-  const three = () => withCharges(newGame(3), { p1: 1, p3: 1 });
-
-  it('does not exist before the reveal (nothing is shown while actions are hidden)', () => {
-    mount(<TurnResolutionModal />, stubStore(clientStateFor(three(), 'p1')));
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  it('shows Stage 1 targeting then Stage 2 outcomes with text tags', () => {
-    mount(<TurnResolutionModal />, stubStore(resolved(three(), { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: attack('KNIFE', 'p1') })));
-    const dialog = screen.getByRole('dialog', { name: 'TURN RESOLUTION' });
-    const targeting = within(dialog).getByTestId('tr-targeting').textContent!;
-    expect(targeting).toContain('Ada targeted Bo with Gun');
-    expect(targeting).toContain('Cy targeted Ada with Knife');
-    const outcomes = within(dialog).getByTestId('tr-outcomes').textContent!;
-    expect(outcomes).toContain('[BLOCKED]');
-    expect(outcomes).toContain("Bo successfully blocked Ada's Gun using SHIELD!");
-    expect(dialog.textContent!.indexOf('Targeting')).toBeLessThan(dialog.textContent!.indexOf('Outcome'));
-  });
-
-  it('a round-ending elimination adds the ROUND OVER result inside the same modal', () => {
-    mount(<TurnResolutionModal />, stubStore(resolved(three(), { p1: attack('GUN', 'p2'), p2: CHARGE, p3: CHARGE })));
-    expect(screen.getAllByRole('dialog')).toHaveLength(1);
-    const end = screen.getByTestId('tr-end');
-    expect(end.textContent).toContain('ROUND OVER');
-    expect(end.textContent).toContain('[ELIMINATED]');
-    expect(screen.getByTestId('tr-next').textContent).toContain('Next round');
-  });
-
-  it('a match-ending turn shows MATCH OVER, +1 Match Win and the decisive collision', () => {
-    mount(<TurnResolutionModal />, stubStore(resolved(withCharges(newGame(2), { p1: 1, p2: 1 }), { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') })));
-    const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByTestId('tr-end').textContent).toContain('Ada wins the match! (+1 Match Win)');
-    expect(within(dialog).getByTestId('tr-outcomes').textContent).toContain("Ada's Gun defeated Bo's Knife via Ranged-over-Melee tier priority");
-    expect(within(dialog).getByTestId('tr-next').textContent).toContain('Next match');
-  });
-
-  it('"Next turn" and Esc dismiss it; it comes back for the following turn', async () => {
-    const store = stubStore(resolved(three(), { p1: CHARGE, p2: CHARGE, p3: CHARGE }));
-    mount(<TurnResolutionModal />, store);
-    const user = userEvent.setup();
-    await user.click(screen.getByTestId('tr-next'));
-    expect(screen.queryByRole('dialog')).toBeNull();
-    const next = resultFor(store.getState().game!, { p1: CHARGE, p2: CHARGE, p3: CHARGE });
-    act(() => store.dispatch({ type: 'result', payload: next }));
-    expect(screen.getByRole('dialog')).toBeTruthy();
-    await user.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  it('closes by itself when the next turn opens, so it never blocks play', () => {
-    const store = stubStore(resolved(three(), { p1: CHARGE, p2: CHARGE, p3: CHARGE }));
-    mount(<TurnResolutionModal />, store);
-    expect(screen.getByRole('dialog')).toBeTruthy();
-    act(() => store.dispatch({ type: 'turnOpen', payload: { turnId: 'fx:m1:r1:t2', turnIndex: 2, phase: 'NORMAL', eligiblePlayerIds: ['p1', 'p2', 'p3'], deadlineAt: 1, serverTime: 1 }, receivedAt: 1 }));
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
-
-  it('a series result cannot be dismissed with Esc and offers Back to start', async () => {
-    const s = reducer(clientStateFor(newGame(2), 'p1'), { type: 'seriesEnded', winnerId: 'p1', matchWins: { p1: 10, p2: 3 } });
-    mount(<TurnResolutionModal />, stubStore(s));
-    const user = userEvent.setup();
-    expect(screen.getByTestId('tr-end').textContent).toContain('Ada wins the series!');
-    await user.keyboard('{Escape}');
-    expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(screen.getByTestId('tr-next').textContent).toContain('Back to start');
-  });
-});
-
-describe('Turn Resolution: [BLOCKED] micro-animation', () => {
-  const blockedTurn = () => {
-    const game = withCharges(newGame(3), { p1: 1, p3: 1 });
-    // Ada's Gun is blocked by Bo's SHIELD (BLOCKED); Cy's Knife kills the Charging... nobody: Cy charges.
-    const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
-    return stubStore(reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result }));
-  };
-
-  it('pops the check icon and slides the text in, for BLOCKED only', () => {
-    mount(<TurnResolutionModal />, blockedTurn());
-    const icon = screen.getByTestId('block-icon');
-    expect(icon.className).toContain('anim-block-icon');
-    expect(icon.textContent).toBe('✔');
-    expect(within(screen.getByTestId('tr-outcomes')).getByText(/successfully blocked/).className).toContain('anim-block-text');
-  });
-
-  it('does not animate other outcomes (ELIMINATED has no block animation)', () => {
-    const game = withCharges(newGame(3), { p1: 1, p3: 1 });
-    const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: CHARGE });
-    mount(<TurnResolutionModal />, stubStore(reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result })));
-    expect(screen.queryByTestId('block-icon')).toBeNull();
-    expect(screen.getByTestId('tr-outcomes').innerHTML).not.toContain('anim-block');
-  });
-
-  it('honours reduced motion: no animation classes at all (§13)', () => {
-    localStorage.setItem('bng.reducedMotion', '1');
-    mount(<TurnResolutionModal />, blockedTurn());
-    expect(screen.getByTestId('block-icon').className).not.toContain('anim-block');
-    expect(screen.getByTestId('tr-outcomes').innerHTML).not.toContain('anim-block');
-  });
-
-  it('the CSS plays once (no infinite loop) and the global reduced-motion rules still switch animations off', async () => {
-    const { readFileSync } = await import('node:fs');
-    const css = readFileSync('web/src/index.css', 'utf8');
-    for (const cls of ['.anim-block-icon', '.anim-block-text']) {
-      const rule = css.split(/\r?\n/).find((l) => l.startsWith(`${cls} `))!;
-      expect(rule).not.toContain('infinite');
-      expect(rule).toMatch(/\d+ms/);
-    }
-    expect(css).toMatch(/@keyframes block-icon-pop[\s\S]*scale\(0\)[\s\S]*scale\(1\.1\)[\s\S]*scale\(1\)/);
-    expect(css).toMatch(/data-reduced-motion="true"\] \*,[\s\S]*animation: none !important/);
-    expect(css).toMatch(/prefers-reduced-motion: reduce[\s\S]*animation: none !important/);
-  });
-});
-
 describe('Match Results & Series Standings modal', () => {
-  it('opens after the turn modal with sorted standings, leader line and Start Next Match', async () => {
+  it('opens for a match-ending turn with sorted standings, leader line and Start Next Match', async () => {
     const game = withCharges(newGame(2), { p1: 1, p2: 1 });
     const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
     const s = reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result });
     const store = stubStore({ ...s, game: { ...s.game!, series: { ...s.game!.series, seriesWinTarget: 5, matchWins: { p1: 4, p2: 2 } } } });
-    mount(<TurnResolutionModal />, store);
+    mount(<MatchResultsModal />, store);
     const user = userEvent.setup();
-    await user.click(screen.getByTestId('tr-next'));
     const dialog = screen.getByRole('dialog', { name: /MATCH RESULTS/ });
     expect(within(dialog).getByTestId('mr-standings').textContent).toMatch(/1st: Ada.*4 Wins.*2nd: Bo.*2 Wins/);
     expect(within(dialog).getByTestId('mr-row-p1').getAttribute('data-match-winner')).toBe('true');
     expect(within(dialog).getByTestId('mr-leader-line').textContent).toContain('Ada is leading the series and needs 1 more win to win the series!');
     await user.click(within(dialog).getByTestId('mr-start'));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('Return to lobby after the series', () => {
+  it('a LOBBY update drops live-turn state but keeps the result overlay data until acknowledged', () => {
+    let s = reducer(clientStateFor(newGame(2), 'p1'), { type: 'seriesEnded', winnerId: 'p1', matchWins: { p1: 3, p2: 1 } });
+    s = reducer(s, { type: 'lobby', lobby: lobbyView(2, { status: 'LOBBY' }) });
+    expect(screenOf(s)).toBe('lobby');
+    expect(s.turn).toBeNull();
+    expect(s.stage).toBe('NONE');
+    expect(s.seriesEnd).not.toBeNull();
+    s = reducer(s, { type: 'seriesAcknowledged' });
+    expect(s).toMatchObject({ game: null, lastResult: null, seriesEnd: null });
+    expect(s.lobby!.players).toHaveLength(2);
   });
 });

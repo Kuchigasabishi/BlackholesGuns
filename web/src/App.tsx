@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { GameScreen } from './screens/Game';
 import { codeFromLocation, HomeScreen } from './screens/Home';
 import { LobbyScreen } from './screens/Lobby';
+import { FxTimelineProvider, useFx } from './fx/FxTimeline';
 import { useGameState, useSettings } from './hooks';
 import { screenOf } from './state/reducer';
 
@@ -42,11 +43,13 @@ export function KeyboardHelp() {
   );
 }
 
-export function App() {
+function AppBody() {
   const state = useGameState();
   const { reducedMotion, setReducedMotion, keyboardMode, setKeyboardMode } = useSettings();
   const [help, setHelp] = useState(false);
-  const screen = screenOf(state);
+  const fx = useFx();
+  // After the final blow of a series the server already reports the lobby; keep the arena up until its animation settles.
+  const screen = screenOf(state) === 'lobby' && state.game !== null && state.seriesEnd !== null && fx.stage !== 'settled' ? 'game' : screenOf(state);
   const inviteCode = typeof window === 'undefined' ? '' : codeFromLocation(window.location.pathname);
 
   return (
@@ -80,5 +83,13 @@ export function App() {
       {screen === 'lobby' && <LobbyScreen />}
       {screen === 'game' && <GameScreen />}
     </>
+  );
+}
+
+export function App() {
+  return (
+    <FxTimelineProvider>
+      <AppBody />
+    </FxTimelineProvider>
   );
 }

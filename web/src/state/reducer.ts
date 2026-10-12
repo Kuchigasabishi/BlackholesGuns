@@ -90,6 +90,7 @@ export type ClientAction =
   | { type: 'error'; message: string | null }
   | { type: 'notice'; message: string | null }
   | { type: 'dismissPhaseNotice' }
+  | { type: 'seriesAcknowledged' }
   | { type: 'reset' };
 
 export const nameLookup = (state: Pick<ClientState, 'lobby'>): NameOf => {
@@ -150,8 +151,18 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
       };
     }
 
-    case 'lobby':
+    case 'lobby': {
+      // The server sends a finished series back to the waiting lobby: drop every live-play
+      // field so the lobby (and host controls) show, but keep the final result for the
+      // "Series over" overlay until the player acknowledges it.
+      if (action.lobby.status === 'LOBBY' && state.game) {
+        return { ...state, lobby: action.lobby, turn: null, stage: 'NONE', availability: null, lockedPlayerIds: [], ownCommit: null, phaseNotice: null };
+      }
       return { ...state, lobby: action.lobby };
+    }
+
+    case 'seriesAcknowledged':
+      return { ...state, game: null, lastResult: null, revealed: null, seriesEnd: null, log: [] };
 
     case 'gameStarted':
       return { ...state, lobby: action.lobby, game: action.state, log: [], lastResult: null, seriesEnd: null };

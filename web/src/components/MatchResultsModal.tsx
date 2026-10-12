@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { trapTab } from '../a11y';
+import { useFx } from '../fx/FxTimeline';
 import { useGameState } from '../hooks';
 import { nameLookup } from '../state/reducer';
 
@@ -17,13 +18,14 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 export function MatchResultsModal() {
   const state = useGameState();
   const { lastResult, game, session } = state;
+  const { stage } = useFx();
   const [dismissed, setDismissed] = useState<string | null>(null);
   const dialog = useRef<HTMLDivElement>(null);
   const primary = useRef<HTMLButtonElement>(null);
 
   const outcome = lastResult?.outcome ?? null;
   const turnId = outcome?.turnId ?? null;
-  const visible = game !== null && outcome?.transition === 'MATCH_ENDED' && !!outcome.matchWinnerId && dismissed !== turnId;
+  const visible = game !== null && outcome?.transition === 'MATCH_ENDED' && !!outcome.matchWinnerId && dismissed !== turnId && stage === 'settled';
 
   useEffect(() => {
     if (!visible) return;

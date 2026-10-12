@@ -311,6 +311,7 @@ export class Room {
       if (m.graceTimer) clearTimeout(m.graceTimer);
       m.graceTimer = null;
     }
+    this.rng = createSeededRng(this.seed); // each series replays from the room seed
     this.game = createSeries({
       seriesId: `${this.code}-${randomBytes(3).toString('hex')}`,
       playerIds: [...this.members.keys()],
@@ -517,15 +518,7 @@ export class Room {
       this.hook('onComplete', { roomCode: this.code, turnId, outcome: result.outcome });
 
       if (this.game.series.status === 'COMPLETE') {
-        this.status = 'COMPLETE';
-        this.stage = 'NONE';
-        this.saveReplay();
-        this.deps.emitter.toRoom(ServerEvents.seriesEnded, {
-          winnerId: this.game.series.winnerId,
-          matchWins: this.game.series.matchWins,
-        });
-        this.deps.emitter.toRoom(ServerEvents.lobbyUpdate, this.lobbyView());
-        this.nextTurnTimer = setTimeout(() => this.close('SERIES_COMPLETE'), this.deps.config.reconnectGraceMs);
+        this.endSeries();
       } else {
         this.stage = 'BETWEEN_TURNS';
         this.nextTurnTimer = setTimeout(() => {
@@ -537,6 +530,34 @@ export class Room {
       console.error(`[room ${this.code}] turn resolution failed`, error);
       this.close('ERROR');
     }
+  }
+
+  /**
+   * Series over (§2): archive the replay, tell everyone who won, then send the
+   * room back to the waiting lobby. The roster, host and Series Win Target are
+   * kept; the game, match, round and turn state are discarded, so no further
+   * match can start until the host starts a new series.
+   */
+  private endSeries(): void {
+    const game = this.game!;
+    this.stage = 'NONE';
+    this.saveReplay();
+    this.deps.emitter.toRoom(ServerEvents.seriesEnded, { winnerId: game.series.winnerId, matchWins: game.series.matchWins });
+
+    for (const t of [this.commitTimer, this.nextTurnTimer]) if (t) clearTimeout(t);
+    this.commitTimer = null;
+    this.nextTurnTimer = null;
+    this.game = null;
+    this.initialState = null;
+    this.lastResult = null;
+    this.commits = new Map();
+    this.replayEntries = [];
+    this.savedEntryCount = -1;
+    this.status = 'LOBBY';
+    for (const m of this.members.values()) {
+      if (!m.connected && !m.graceTimer) m.graceTimer = setTimeout(() => this.removeFromLobby(m.playerId), this.deps.config.reconnectGraceMs);
+    }
+    this.deps.emitter.toRoom(ServerEvents.lobbyUpdate, this.lobbyView());
   }
 
   // ------------------------------------------------------------------- views

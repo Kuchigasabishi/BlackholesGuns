@@ -1,9 +1,15 @@
+import { useRef } from 'react';
 import { ATTACKS } from '../../../src/engine';
+import { ArenaFX } from '../components/ArenaFX';
+import { actionEmoji } from '../format/emoji';
+import { useFx } from '../fx/FxTimeline';
 import { Avatar } from '../components/Avatar';
 import { ControlPanel } from '../components/ControlPanel';
 import { EventLog } from '../components/EventLog';
 import { FXLayer } from '../components/FXLayer';
-import { TurnResolutionModal } from '../components/TurnResolutionModal';
+import { SeriesResultModal } from '../components/SeriesResultModal';
+import { TurnBanner } from '../components/TurnBanner';
+import { MatchResultsModal } from '../components/MatchResultsModal';
 import { actionTag, PHASE_LABEL } from '../format/describeTurn';
 import { formatClock, useCountdown, useGameState, useSettings, useStore } from '../hooks';
 import { badgeOf, nameLookup, type Badge, type ClientState } from '../state/reducer';
@@ -107,60 +113,105 @@ export function Roster() {
   const state = useGameState();
   const { game, session } = state;
   const { reducedMotion } = useSettings();
+  const { stage, plan } = useFx();
+  const arena = useRef<HTMLDivElement>(null);
   if (!game || !session) return null;
   const nameOf = nameLookup(state);
   const eliminatedNow = new Set(state.lastResult?.outcome.eliminatedPlayerIds ?? []);
+  const outcome = state.lastResult?.outcome ?? null;
+  // While the reveal / projectile / impact timeline plays, the static values (eliminated badge,
+  // Charge, Match Wins) still show the state BEFORE the turn; they update when it settles.
+  const playing = plan !== null;
+  const chargeBefore = new Map((outcome?.playerResults ?? []).map((r) => [r.playerId, r.chargeBefore]));
+  const animate = !reducedMotion;
 
   return (
     <section aria-labelledby="roster-h">
       <h2 id="roster-h" className="sr-only">
         Players
       </h2>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="roster">
-        {game.series.lobby.map((id, seat) => {
-          const p = game.players[id]!;
-          const badge = badgeOf(state, id);
-          const line = actionLine(state, id, nameOf);
-          const justDied = state.revealed !== null && eliminatedNow.has(id);
-          const isOwn = id === session.playerId;
-          // §12 fog of war: only your own Charge is ever shown.
-          const chargeDisplay = !p.alive ? '—' : isOwn ? String(p.charge) : '?';
-          return (
-            <li
-              key={id}
-              data-testid={`player-${id}`}
-              data-eliminated={!p.alive}
-              aria-label={`${nameOf(id)}${isOwn ? ' (you)' : ''}, ${p.alive ? 'alive' : 'eliminated'}, ${isOwn ? `${p.charge} charge` : 'charge hidden'}, ${p.matchWins} match wins`}
-              className={`neon-box relative flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${p.alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''}`}
-            >
-              {line && p.alive !== undefined && (
-                <span data-testid={`reveal-${id}`} className={`bracket absolute -top-3 left-1/2 w-max max-w-[96%] -translate-x-1/2 rounded border border-neon bg-void px-2 py-0.5 text-center text-xs leading-tight break-words text-neon ${reducedMotion ? '' : 'anim-pop'}`}>
-                  {line}
-                </span>
-              )}
-              <div className={justDied && !reducedMotion ? 'anim-ko' : ''}>
-                <Avatar seat={seat} playerId={id} eliminated={!p.alive} />
-              </div>
-              <p className="mt-2 w-full truncate font-bold">
-                {nameOf(id)}
-                {isOwn && <span className="bracket ml-1 text-xs text-gold">[YOU]</span>}
-              </p>
-              <p className={`bracket text-sm ${isOwn ? 'text-gold' : 'text-ink-dim'}`} title={isOwn ? undefined : "Opponents' Charge is hidden"}>
-                ⚡ {chargeDisplay} · 🏆 {p.matchWins}/{game.series.seriesWinTarget}
-              </p>
-              <p className={`bracket mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`}>
-                <span aria-hidden="true">{BADGE_ICON[badge]} </span>
-                {BADGE_TEXT[badge]}
-              </p>
-              {p.connectionStatus === 'DISCONNECTED' && p.alive && <p className="bracket mt-1 text-xs text-danger">[OFFLINE]</p>}
-            </li>
-          );
-        })}
-      </ul>
+      <div ref={arena} className="relative" data-testid="arena">
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="roster">
+          {game.series.lobby.map((id, seat) => {
+            const p = game.players[id]!;
+            const acted = playing && plan.cards[id] !== undefined;
+            const alive = acted ? true : p.alive;
+            const badge = acted ? 'READY' : badgeOf(state, id);
+            const line = actionLine(state, id, nameOf);
+            const fx = state.revealed !== null ? (plan?.cards[id] ?? null) : null;
+            const justDied = state.revealed !== null && eliminatedNow.has(id);
+            const isOwn = id === session.playerId;
+            const wins = playing && plan.matchWinnerId === id ? p.matchWins - 1 : p.matchWins;
+            // §12 fog of war: only your own Charge is ever shown.
+            const ownCharge = acted ? (chargeBefore.get(id) ?? p.charge) : p.charge;
+            const chargeDisplay = !alive ? '—' : isOwn ? String(ownCharge) : '?';
+            const hitNow = playing && stage === 'impact' && fx?.reaction === 'HIT';
+            const clashNow = playing && stage === 'impact' && fx?.reaction === 'CLASH';
+            // The big action emoji sits on the card from the reveal on (static once the animation is over).
+            const emoji = state.revealed !== null ? (fx?.actionEmoji ?? revealedEmoji(state, id)) : null;
+            return (
+              <li
+                key={id}
+                data-testid={`player-${id}`}
+                data-card-id={id}
+                data-eliminated={!alive}
+                data-fx={hitNow ? 'hit' : clashNow ? 'clash' : undefined}
+                aria-label={`${nameOf(id)}${isOwn ? ' (you)' : ''}, ${alive ? 'alive' : 'eliminated'}, ${isOwn ? `${ownCharge} charge` : 'charge hidden'}, ${wins} match wins`}
+                className={`neon-box relative flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''} ${animate && hitNow ? 'anim-fx-hit' : ''} ${animate && clashNow ? 'anim-fx-clash-card' : ''}`}
+              >
+                {line && (
+                  <span data-testid={`reveal-${id}`} className={`bracket absolute -top-3 left-1/2 w-max max-w-[96%] -translate-x-1/2 rounded border border-neon bg-void px-2 py-0.5 text-center text-xs leading-tight break-words text-neon ${animate ? 'anim-pop' : ''}`}>
+                    {line}
+                  </span>
+                )}
+                {emoji && (
+                  <span
+                    data-testid={`action-emoji-${id}`}
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute right-1 top-1 z-10 text-4xl leading-none drop-shadow-[0_0_8px_rgba(0,255,255,0.7)] ${animate ? (fx?.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
+                  >
+                    {emoji}
+                  </span>
+                )}
+                {clashNow && fx?.clashEmoji && (
+                  <span data-testid={`clash-${id}`} aria-hidden="true" className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-6xl ${animate ? 'anim-fx-clash' : ''}`}>
+                    {fx.clashEmoji}
+                  </span>
+                )}
+                {hitNow && (
+                  <span data-testid={`damage-${id}`} aria-hidden="true" className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-danger/40 text-6xl ${animate ? 'anim-fx-damage' : ''}`}>
+                    💥
+                  </span>
+                )}
+                <div className={justDied && !playing && animate ? 'anim-ko' : ''}>
+                  <Avatar seat={seat} playerId={id} eliminated={!alive} />
+                </div>
+                <p className="mt-2 w-full truncate font-bold">
+                  {nameOf(id)}
+                  {isOwn && <span className="bracket ml-1 text-xs text-gold">[YOU]</span>}
+                </p>
+                <p className={`bracket text-sm ${isOwn ? 'text-gold' : 'text-ink-dim'}`} title={isOwn ? undefined : "Opponents' Charge is hidden"}>
+                  ⚡ {chargeDisplay} · 🏆 {wins}/{game.series.seriesWinTarget}
+                </p>
+                <p className={`bracket mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`}>
+                  <span aria-hidden="true">{BADGE_ICON[badge]} </span>
+                  {BADGE_TEXT[badge]}
+                </p>
+                {p.connectionStatus === 'DISCONNECTED' && alive && <p className="bracket mt-1 text-xs text-danger">[OFFLINE]</p>}
+              </li>
+            );
+          })}
+        </ul>
+        <ArenaFX container={arena} />
+      </div>
     </section>
   );
 }
 
+function revealedEmoji(state: ClientState, playerId: string): string | null {
+  const a = state.revealed?.find((r) => r.playerId === playerId);
+  return a ? actionEmoji(a) : null;
+}
 
 // ------------------------------------------------------------------ the screen
 
@@ -169,9 +220,11 @@ export function GameScreen() {
   return (
     <main id="main" className="mx-auto flex max-w-7xl flex-col gap-4 px-3 py-4">
       <FXLayer />
-      <TurnResolutionModal />
+      <SeriesResultModal />
+      <MatchResultsModal />
       <TopBar />
       <PhaseNotice />
+      <TurnBanner />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="space-y-4">
           <Roster />

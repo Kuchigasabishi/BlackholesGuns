@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SERIES_WIN_TARGET, SERIES_WIN_TARGET_OPTIONS } from '../../../src/engine';
 import { Avatar } from '../components/Avatar';
+import { SeriesResultModal } from '../components/SeriesResultModal';
 import { useGameState, useStore } from '../hooks';
 
 const SLOTS = 8;
@@ -30,6 +31,7 @@ export function LobbyScreen() {
 
   return (
     <main id="main" className="mx-auto max-w-4xl px-4 py-8">
+      <SeriesResultModal />
       <h1 className="font-display text-3xl font-black text-neon">Lobby</h1>
 
       <section className="neon-box mt-6 rounded-2xl p-6" aria-labelledby="invite-h">

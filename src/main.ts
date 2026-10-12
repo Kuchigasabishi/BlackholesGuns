@@ -6,7 +6,8 @@ import { createFileReplayStore, createGameServer, createStdoutTelemetry } from '
 const env = process.env;
 const net = readNetworkEnv(env);
 const port = net.port;
-const baseUrl = env.PUBLIC_BASE_URL;
+// Railway exposes the service's public hostname as RAILWAY_PUBLIC_DOMAIN; PUBLIC_BASE_URL overrides it.
+const baseUrl = env.PUBLIC_BASE_URL ?? (env.RAILWAY_PUBLIC_DOMAIN ? `https://${env.RAILWAY_PUBLIC_DOMAIN}` : undefined);
 
 // Test hooks rewrite game state. They are opt-in and refused outright in production.
 const devMode = env.DEV_HOOKS === '1';

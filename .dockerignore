@@ -1,0 +1,13 @@
+node_modules
+web/dist
+.git
+.claude
+.cc-history
+.vscode
+.visual
+docs
+coverage
+replays
+*.log
+.env
+.env.*

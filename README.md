@@ -269,3 +269,38 @@ Documented honestly, as a QA project should:
 - **The 83 stall scenarios are a reconstruction,** not the original audit suite.
 - **Browser coverage:** verified in Microsoft Edge on Windows. Accessibility was checked with automated and keyboard-only testing, not with real screen readers.
 - **Avatars and effects are emoji and CSS** placeholders; the GDD is not published here.
+
+## Production Deployment (Railway)
+
+One container serves everything: the Node.js Socket.IO game server and the built web client. The browser connects to its own origin, so there is no client URL to configure. Files involved: [Dockerfile](Dockerfile), [railway.json](railway.json), [.dockerignore](.dockerignore).
+
+**Scripts**
+
+| Command | What it does |
+|---|---|
+| `npm run build` | Typechecks, then bundles the web client into `web/dist` (Vite). |
+| `npm start` | Starts the server (`tsx src/main.ts`; `tsx` is a production dependency because the server runs straight from TypeScript). Serves `web/dist` if it exists. |
+
+**Deploy**
+
+1. Push this repo to GitHub, then in Railway choose **New Project → Deploy from GitHub repo**. Railway reads `railway.json` and builds the Dockerfile.
+2. Open the service's **Settings → Networking → Generate Domain**.
+3. Add the variables below (service **Variables** tab), then redeploy.
+4. Check `https://<your-domain>/healthz` returns `{"ok":true}`, then open the domain and create a room.
+
+**Environment variables**
+
+| Variable | Required | Value / notes |
+|---|---|---|
+| `NODE_ENV` | yes | `production`. The server refuses to start in production with `DEV_HOOKS=1` or `TUNNEL=1`. (Set automatically in the Docker image.) |
+| `PORT` | no | Injected by Railway; the server reads it. Defaults to `3000` locally. |
+| `PUBLIC_BASE_URL` | recommended | Your public origin, e.g. `https://bng.up.railway.app`. Used for invite links and CORS. If unset, Railway's `RAILWAY_PUBLIC_DOMAIN` is used automatically. |
+| `RAILWAY_PUBLIC_DOMAIN` | automatic | Provided by Railway once a domain is generated. |
+| `COMMIT_WINDOW_MS` | no | Commit timer, default `30000`. |
+| `RECONNECT_GRACE_MS` | no | Seat/room hold after disconnect, default `60000`. |
+| `INTER_TURN_DELAY_MS` | no | Pause after each result, default `4000` (the card animation takes ~2.3 s, so keep it above that). |
+| `REPLAY_DIR` | no | Directory for series replay files. The container filesystem is ephemeral; mount a Railway volume to keep them. |
+| `SERVER_SEED` | no | Fixes the RNG; leave unset in production. |
+| `DEV_HOOKS`, `DEV_TOKEN`, `TUNNEL` | never | Development only. Do not set in production. |
+
+**Notes:** room state lives in server memory, so run a single instance (do not scale replicas) and expect rooms to end when the service restarts or redeploys. There is still no authentication or rate limiting (see Known limitations).

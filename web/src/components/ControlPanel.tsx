@@ -18,6 +18,7 @@ import {
 } from '../../../src/engine';
 import { useGameState, useSettings, useStore } from '../hooks';
 import type { Choice } from '../net/store';
+import { attackTip, reflectTip, type MatrixTip } from '../format/matrixTip';
 import { nameLookup } from '../state/reducer';
 
 const ATTACK_ICON: Record<AttackId, string> = {
@@ -82,6 +83,8 @@ interface ActionButtonProps {
   readonly why: string;
   readonly onHint: (text: string) => void;
   readonly onPick: () => void;
+  /** Matrix rules shown on hover / focus / tap. */
+  readonly tip?: MatrixTip | undefined;
 }
 
 /**
@@ -90,41 +93,85 @@ interface ActionButtonProps {
  * Disabled actions use aria-disabled (not `disabled`) so keyboard and screen-reader
  * users can still focus them and hear why they are unavailable.
  */
-function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why, onHint, onPick }: ActionButtonProps) {
+const TIP_TONE = { good: 'text-ok', bad: 'text-danger', gold: 'text-gold', dim: 'text-ink-dim' } as const;
+const TIP_ICON = { good: '✔', bad: '❌', gold: '↩', dim: '·' } as const;
+
+/** Small dark overlay above a button. Purely informational: the button's own label stays the accessible name. */
+function MatrixTooltip({ id, icon, tip }: { id: string; icon: string; tip: MatrixTip }) {
   return (
-    <button
-      type="button"
-      data-action={id}
-      data-kind={kind}
-      data-row={row}
-      aria-disabled={!enabled}
-      aria-pressed={selected}
-      aria-describedby={why ? `why-${id}` : undefined}
-      title={why || undefined}
-      onFocus={() => onHint(why)}
-      onMouseEnter={() => onHint(why)}
-      onClick={() => {
-        if (enabled) {
-          onPick();
-          onHint('');
-        } else onHint(why);
-      }}
-      className={[
-        'bracket flex min-w-[7.5rem] items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold uppercase transition',
-        enabled ? 'border-danger bg-danger/10 text-ink hover:bg-danger/25' : 'cursor-not-allowed border-dashed border-edge text-ink-dim opacity-40 grayscale',
-        selected ? 'bg-gold/20 ring-2 ring-gold' : '',
-      ].join(' ')}
+    <span
+      id={`tip-${id}`}
+      role="tooltip"
+      data-testid={`tip-${id}`}
+      className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 w-max max-w-[min(18rem,80vw)] rounded-lg border border-edge bg-void/95 px-3 py-2 text-left text-xs normal-case shadow-lg backdrop-blur"
     >
-      <span aria-hidden="true">{icon}</span>
-      <span>{label}</span>
-      <span className="text-gold">({cost}⚡)</span>
-      {selected && <span aria-hidden="true">✔</span>}
-      {why && (
-        <span id={`why-${id}`} className="sr-only">
-          {why}
+      <span className="block font-bold text-ink">
+        <span aria-hidden="true">{icon} </span>
+        {tip.title}
+      </span>
+      {tip.lines.map((l) => (
+        <span key={l.label} className="mt-1 block text-ink-dim">
+          <span aria-hidden="true">{TIP_ICON[l.tone]} </span>
+          {l.label}: <span className={`font-bold ${TIP_TONE[l.tone]}`}>{l.items.join(', ')}</span>
         </span>
-      )}
-    </button>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * Stable top-level component: defining this inside ControlPanel would remount
+ * every button on each render and drop keyboard focus.
+ * Disabled actions use aria-disabled (not `disabled`) so keyboard and screen-reader
+ * users can still focus them and hear why they are unavailable.
+ * The tooltip opens on hover and on focus (which is what a tap gives on a phone) and
+ * closes the instant the pointer leaves or focus moves away.
+ */
+function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why, onHint, onPick, tip }: ActionButtonProps) {
+  const [tipOpen, setTipOpen] = useState(false);
+  return (
+    <span className="relative inline-flex" onMouseLeave={() => setTipOpen(false)}>
+      <button
+        type="button"
+        data-action={id}
+        data-kind={kind}
+        data-row={row}
+        aria-disabled={!enabled}
+        aria-pressed={selected}
+        aria-describedby={[why ? `why-${id}` : '', tip && tipOpen ? `tip-${id}` : ''].filter(Boolean).join(' ') || undefined}
+        onFocus={() => {
+          onHint(why);
+          setTipOpen(true);
+        }}
+        onBlur={() => setTipOpen(false)}
+        onMouseEnter={() => {
+          onHint(why);
+          setTipOpen(true);
+        }}
+        onClick={() => {
+          if (enabled) {
+            onPick();
+            onHint('');
+          } else onHint(why);
+        }}
+        className={[
+          'bracket flex min-w-[7.5rem] items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold uppercase transition',
+          enabled ? 'border-danger bg-danger/10 text-ink hover:bg-danger/25' : 'cursor-not-allowed border-dashed border-edge text-ink-dim opacity-40 grayscale',
+          selected ? 'bg-gold/20 ring-2 ring-gold' : '',
+        ].join(' ')}
+      >
+        <span aria-hidden="true">{icon}</span>
+        <span>{label}</span>
+        <span className="text-gold">({cost}⚡)</span>
+        {selected && <span aria-hidden="true">✔</span>}
+        {why && (
+          <span id={`why-${id}`} className="sr-only">
+            {why}
+          </span>
+        )}
+      </button>
+      {tip && tipOpen && <MatrixTooltip id={id} icon={icon} tip={tip} />}
+    </span>
   );
 }
 
@@ -294,6 +341,7 @@ export function ControlPanel() {
       why={describe(cost, a)}
       onHint={setHint}
       onPick={onPick}
+      tip={kind === 'attack' ? attackTip(id as AttackId) : kind === 'defense' && cost > 0 ? reflectTip(id as DefenseId) : undefined}
     />
   );
 

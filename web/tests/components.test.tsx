@@ -155,6 +155,28 @@ describe('Control panel: names, costs and affordability (Figure 1)', () => {
     expect(button('DOUBLE_REFLECT').getAttribute('aria-disabled')).toBe('true');
   });
 
+  it('shows matrix tooltips on hover and focus, and hides them when the pointer leaves', async () => {
+    mount(<ControlPanel />, inGame(2, 5).store);
+    const user = userEvent.setup();
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    await user.hover(button('FLAMETHROWER'));
+    const tip = screen.getByRole('tooltip');
+    expect(tip.textContent).toContain('Effective against: SHIELD (Eliminates Target)');
+    expect(tip.textContent).toContain('Blocked by: DODGE');
+    await user.unhover(button('FLAMETHROWER'));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    await user.hover(button('GATLING_GUN'));
+    expect(screen.getByRole('tooltip').textContent).toContain('Effective against: DODGE (Eliminates Target)');
+    expect(screen.getByRole('tooltip').textContent).toContain('Blocked by: SHIELD');
+    await user.unhover(button('GATLING_GUN'));
+    act(() => button('DOUBLE_REFLECT').focus()); // a tap on a phone focuses the button
+    expect(screen.getByRole('tooltip').textContent).toContain('Reflects (attacker is eliminated): GUN');
+    act(() => button('DOUBLE_REFLECT').blur());
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    await user.hover(button('DODGE'));
+    expect(screen.queryByRole('tooltip')).toBeNull(); // only attacks and Reflects have one
+  });
+
   it('lists all 12 attacks grouped by tier with their costs', () => {
     mount(<ControlPanel />, inGame(2, 5).store);
     expect(document.querySelectorAll('button[data-kind="attack"]')).toHaveLength(12);
@@ -181,7 +203,7 @@ describe('Control panel: names, costs and affordability (Figure 1)', () => {
     expect(screen.getByTestId('why-line').textContent).toBe('Needs 4⚡ — you have 2⚡');
     fireEvent.mouseEnter(button('BLACKHOLE'));
     expect(screen.getByTestId('why-line').textContent).toBe('Needs 5⚡ — you have 2⚡');
-    expect(nuke.getAttribute('aria-describedby')).toBe('why-NUKE');
+    expect(nuke.getAttribute('aria-describedby')).toContain('why-NUKE');
     expect(document.getElementById('why-NUKE')!.textContent).toBe('Needs 4⚡ — you have 2⚡');
   });
 

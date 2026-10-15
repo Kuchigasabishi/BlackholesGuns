@@ -2,11 +2,11 @@ import { ATTACKS } from '../../../src/engine';
 import { actionEmoji } from '../format/emoji';
 import { Avatar } from '../components/Avatar';
 import { ControlPanel } from '../components/ControlPanel';
-import { EventLog } from '../components/EventLog';
+import { SeriesStandings } from '../components/SeriesStandings';
 import { FXLayer } from '../components/FXLayer';
 import { SeriesResultModal } from '../components/SeriesResultModal';
 import { MatchResultsModal } from '../components/MatchResultsModal';
-import { actionTag, PHASE_LABEL } from '../format/describeTurn';
+import { actionTag } from '../format/describeTurn';
 import { formatClock, useCountdown, useGameState, useSettings, useStore } from '../hooks';
 import { badgeOf, nameLookup, type Badge, type ClientState } from '../state/reducer';
 
@@ -33,7 +33,6 @@ export function TopBar() {
 
   const phase = turn?.phase ?? game.round.phase;
   const streak = game.round.noEliminationStreak;
-  const badge = badgeOf(state, session.playerId);
   const alive = game.round.survivorIds.length;
   const toSuddenDeath = alive === 2 && phase === 'NORMAL' ? Math.max(0, 10 - streak) : null;
 
@@ -41,21 +40,8 @@ export function TopBar() {
   return (
     <header className="neon-box rounded-2xl p-3" aria-label="Game status">
       <ul className="flex flex-wrap items-center gap-2 text-sm">
-        <li className={chip}>[ ROOM: #{session.roomCode} ]</li>
-        <li className={chip} data-testid="turn-index">
-          [ TURN: {turn?.turnIndex ?? game.round.turnIndex} ]
-        </li>
-        <li className={`${chip} ${phase === 'NORMAL' ? 'text-neon' : 'border-gold text-gold'}`} data-testid="phase-banner">
-          [ PHASE: {PHASE_LABEL[phase]} ]
-        </li>
-        <li className={chip} data-testid="streak" title="Consecutive turns with no elimination. Resets to 0 whenever anyone is eliminated.">
-          [ STREAK: {streak} NO-ELIM ]
-        </li>
         <li className={`${chip} text-neon-pink`} data-testid="timer" aria-label={`Commit timer ${seconds ?? 'not running'} seconds`}>
           [ COMMIT TIMER: {stage === 'COMMIT' ? formatClock(seconds) : '--:--'} ]
-        </li>
-        <li className={`${chip} ${BADGE_STYLE[badge]}`} data-testid="my-status">
-          [ YOUR STATUS: {BADGE_TEXT[badge]} ]
         </li>
         <li className={chip}>[ ALIVE: {alive} ]</li>
         <li className={chip} data-testid="series-target-chip">[ FIRST TO: {game.series.seriesWinTarget} WINS ]</li>
@@ -189,7 +175,7 @@ function revealedEmoji(state: ClientState, playerId: string): string | null {
 // ------------------------------------------------------------------ the screen
 
 export function GameScreen() {
-  const { log, seriesEnd } = useGameState();
+  const { seriesEnd } = useGameState();
   return (
     <main id="main" className="mx-auto flex max-w-7xl flex-col gap-4 px-3 py-4">
       <FXLayer />
@@ -202,7 +188,7 @@ export function GameScreen() {
           <Roster />
           {seriesEnd ? null : <div id="action-panel" tabIndex={-1}><ControlPanel /></div>}
         </div>
-        <EventLog entries={log} />
+        <SeriesStandings />
       </div>
     </main>
   );

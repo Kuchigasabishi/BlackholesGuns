@@ -5,7 +5,6 @@ import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ATTACK_IDS, ATTACKS, DEFENSES, DEFENSE_IDS } from '../../src/engine';
 import { App } from '../src/App';
-import { EventLog } from '../src/components/EventLog';
 import { ControlPanel } from '../src/components/ControlPanel';
 import { StoreProvider, SettingsProvider } from '../src/hooks';
 import { LobbyScreen } from '../src/screens/Lobby';
@@ -473,20 +472,13 @@ describe('Roster: status badges and colour-independent elimination', () => {
 });
 
 describe('Top bar and phase banner', () => {
-  it('shows room, turn index, phase, exact streak counter, timer and your status', () => {
+  it('shows only the commit timer, alive count and series target', () => {
     mount(<TopBar />, inGame(3, 0).store);
-    expect(screen.getByText('[ ROOM: #K7M2QP ]')).toBeTruthy();
-    expect(screen.getByTestId('turn-index').textContent).toBe('[ TURN: 1 ]');
-    expect(screen.getByTestId('phase-banner').textContent).toBe('[ PHASE: NORMAL PHASE ]');
-    expect(screen.getByTestId('streak').textContent).toBe('[ STREAK: 0 NO-ELIM ]');
     expect(screen.getByTestId('timer').textContent).toMatch(/\[ COMMIT TIMER: 00:2[45] \]/);
-    expect(screen.getByTestId('my-status').textContent).toBe('[ YOUR STATUS: HIDDEN ? ]');
-  });
-
-  it('shows the exact no-elimination streak from the server', () => {
-    const game = withStreak(newGame(3), 3, 'NORMAL');
-    mount(<TopBar />, stubStore(clientStateFor(game, 'p1')));
-    expect(screen.getByTestId('streak').textContent).toBe('[ STREAK: 3 NO-ELIM ]');
+    expect(screen.getByText('[ ALIVE: 3 ]')).toBeTruthy();
+    expect(screen.getByTestId('series-target-chip').textContent).toBe('[ FIRST TO: 10 WINS ]');
+    for (const id of ['turn-index', 'phase-banner', 'streak', 'my-status']) expect(screen.queryByTestId(id)).toBeNull();
+    expect(screen.queryByText(/ROOM:/)).toBeNull();
   });
 
   it('counts down to Sudden Death when two players remain, but not with three', () => {
@@ -498,11 +490,11 @@ describe('Top bar and phase banner', () => {
   });
 
   it.each([
-    ['SUDDEN_DEATH', 10, '[ PHASE: SUDDEN DEATH ]', 'all six defenses are disabled'],
-    ['OVERTIME', 15, '[ PHASE: OVERTIME ]', 'normal combat rules'],
-  ] as const)('shows the %s banner with an explanation', (phase, streak, label, help) => {
+    ['SUDDEN_DEATH', 10, 'all six defenses are disabled'],
+    ['OVERTIME', 15, 'normal combat rules'],
+  ] as const)('explains the %s phase in a note (there is no phase chip any more)', (phase, streak, help) => {
     mount(<TopBar />, stubStore(clientStateFor(withStreak(newGame(2), streak, phase), 'p1')));
-    expect(screen.getByTestId('phase-banner').textContent).toBe(label);
+    expect(screen.queryByTestId('phase-banner')).toBeNull();
     expect(screen.getByTestId('phase-help').textContent).toContain(help);
   });
 
@@ -519,106 +511,29 @@ describe('Top bar and phase banner', () => {
 
 });
 
-// ------------------------------------------------------------------- event log
-
-describe('Event log', () => {
-  const twoTurns = () => {
-    const game = withCharges(newGame(3), { p1: 3 });
-    const t1 = resultFor(game, { p1: attack('KATANA', 'p2', 'p3'), p2: defend('DODGE'), p3: CHARGE });
-    return { game, t1 };
-  };
-
-  it('is a labelled, focusable, polite live log containing the multi-line breakdown', () => {
-    const { game, t1 } = twoTurns();
-    localStorage.setItem('bng.reducedMotion', '1');
-    const store = stubStore(reducer(clientStateFor(game, 'p1'), { type: 'result', payload: t1 }));
-    mount(<EventLog entries={store.getState().log} />, store);
-    const log = screen.getByRole('log', { name: 'Event log' });
-    expect(log.getAttribute('aria-live')).toBe('polite');
-    expect(log.getAttribute('tabindex')).toBe('0');
-    expect(log.textContent).toContain('Ada targeted Bo, Cy with Katana:');
-    expect(log.textContent).toContain('→ Bo [BLOCKED] Dodge blocked Katana.');
-    expect(log.textContent).toContain('→ Cy [ELIMINATED] was Charging and was hit by Katana.');
-    expect(log.textContent).toContain('Cy [ELIMINATED]');
-    expect(screen.getByRole('heading', { name: '[ Turn 1 · NORMAL PHASE ]' })).toBeTruthy();
-  });
-
-  it('preserves line breaks in multi-line blocks', () => {
-    const { game, t1 } = twoTurns();
-    localStorage.setItem('bng.reducedMotion', '1');
-    mount(<EventLog entries={reducer(clientStateFor(game, 'p1'), { type: 'result', payload: t1 }).log} />, stubStore());
-    const block = [...document.querySelectorAll('p')].find((p) => p.textContent?.startsWith('Ada targeted'))!;
-    expect(block.className).toContain('whitespace-pre-wrap');
-    expect(block.textContent!.split('\n').length).toBeGreaterThan(2);
-  });
-
-  it('with reduced motion, a new turn appears all at once (no playback delay)', () => {
-    vi.useFakeTimers();
-    localStorage.setItem('bng.reducedMotion', '1');
-    const { game, t1 } = twoTurns();
-    const store = stubStore();
-    const first = reducer(clientStateFor(game, 'p1'), { type: 'result', payload: t1 });
-    store.set(first); // history already present, so the "first render" shortcut cannot hide a bug
-    const wrap = () => (
-      <StoreProvider store={store}>
-        <SettingsProvider>
-          <EventLog entries={store.getState().log} />
-        </SettingsProvider>
-      </StoreProvider>
-    );
-    const { rerender } = render(wrap());
-    act(() => store.dispatch({ type: 'result', payload: resultFor(first.game!, { p1: CHARGE, p2: CHARGE }) }));
-    rerender(wrap());
-    // Everything is visible immediately, without advancing any timers.
-    expect(screen.getByRole('log').textContent).toContain('No eliminations. No-elimination streak: 1.');
-    expect(screen.queryByRole('button', { name: 'Show everything' })).toBeNull();
-  });
-
-  it('otherwise plays the new turn back block by block, and "Show everything" skips ahead', () => {
-    vi.useFakeTimers();
-    const { game, t1 } = twoTurns();
-    const store = stubStore(clientStateFor(game, 'p1'));
-    const Live = () => {
-      return <EventLog entries={store.getState().log} />;
-    };
-    const wrap = (ui: ReactElement) => (
-      <StoreProvider store={store}>
-        <SettingsProvider>{ui}</SettingsProvider>
-      </StoreProvider>
-    );
-    // Start with one turn already in the log (history is shown immediately), then land another.
-    const first = reducer(clientStateFor(game, 'p1'), { type: 'result', payload: t1 });
-    store.set(first);
-    const { rerender } = render(wrap(<Live />));
-    expect(screen.getByRole('log').textContent).toContain('Cy [ELIMINATED]');
-
-    const t2 = resultFor(first.game!, { p1: CHARGE, p2: CHARGE });
-    act(() => store.dispatch({ type: 'result', payload: t2 }));
-    rerender(wrap(<Live />));
-    const total = store.getState().log.at(-1)!.blocks.length;
-    expect(total).toBeGreaterThan(2);
-    // Nothing of turn 2's body yet…
-    expect(screen.getByRole('log').textContent).not.toContain('REVEAL — all actions at once:\n  Ada cast [CHARGE]');
-    act(() => void vi.advanceTimersByTime(450));
-    expect(screen.getByRole('log').textContent).toContain('Ada cast [CHARGE]');
-    expect(screen.getByRole('log').textContent).not.toContain('No eliminations');
-    act(() => void vi.advanceTimersByTime(450 * total));
-    expect(screen.getByRole('log').textContent).toContain('No eliminations');
-  });
-
-  it('is empty-state friendly', () => {
-    mount(<EventLog entries={[]} />, stubStore());
-    expect(screen.getByText(/Nothing has happened yet/)).toBeTruthy();
-  });
-});
-
 describe('Whole game screen and settings', () => {
-  it('lays out status bar, roster, control panel and log together', () => {
+  it('lays out status bar, roster, control panel and the standings, with no event log', () => {
     mount(<GameScreen />, inGame(4, 2).store);
-    expect(screen.getByTestId('phase-banner')).toBeTruthy();
+    expect(screen.getByTestId('timer')).toBeTruthy();
     expect(screen.getByTestId('roster')).toBeTruthy();
     expect(screen.getByTestId('control-panel')).toBeTruthy();
-    expect(screen.getByRole('log')).toBeTruthy();
+    expect(screen.getByTestId('series-standings')).toBeTruthy();
+    expect(screen.queryByRole('log')).toBeNull();
+  });
+
+  it('Series Standings sorts by Match Wins, shares places on ties and updates when a match ends', () => {
+    const store = inGame(3, 0).store;
+    const withWins = (wins: Record<string, number>) => {
+      const s = store.getState();
+      store.set({ ...s, game: { ...s.game!, series: { ...s.game!.series, matchWins: wins } } });
+    };
+    withWins({ p1: 1, p2: 2, p3: 2 });
+    mount(<GameScreen />, store);
+    const text = () => screen.getByTestId('series-standings').textContent!;
+    expect(text()).toMatch(/👑 1st: Bo.*\(2 Wins\).*1st: Cy.*\(2 Wins\).*3rd: Ada.*\(1 Win\)/);
+    act(() => withWins({ p1: 3, p2: 2, p3: 2 }));
+    expect(text()).toMatch(/👑 1st: Ada.*\(3 Wins\).*2nd: Bo.*\(2 Wins\)/);
+    expect(text()).toContain('First to 10 Match Wins');
   });
 
   it('the Reduced motion switch persists and marks the document', async () => {

@@ -211,7 +211,7 @@ describe('Control panel: names, costs and affordability (Figure 1)', () => {
     mount(<ControlPanel />, inGame(2, 1).store);
     await userEvent.click(button('NUKE'));
     expect(button('NUKE').getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByTestId('lock-in').textContent).toBe('LOCK IN');
+    expect(screen.queryByTestId('confirm-drawer')).toBeNull(); // nothing chosen, so no confirmation drawer
   });
 });
 
@@ -227,7 +227,7 @@ describe('Control panel: choosing, targeting and locking in', () => {
     expect(store.commits).toHaveLength(0);
 
     await userEvent.click(within(picker).getByRole('button', { name: 'Bo' }));
-    expect(screen.getByTestId('lock-in').textContent).toBe('LOCK IN: Gun → Bo');
+    expect(screen.getByTestId('confirm-choice').textContent).toBe('Gun → Bo');
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'GUN', targets: ['p2'] }]);
   });
@@ -250,9 +250,9 @@ describe('Control panel: choosing, targeting and locking in', () => {
     const picker = screen.getByTestId('target-picker');
     expect(within(picker).getByText('Choose up to 3 targets for Katana')).toBeTruthy();
     for (const n of ['Bo', 'Cy', 'Di', 'Ed']) await userEvent.click(within(picker).getByRole('button', { name: new RegExp(n) }));
-    expect(screen.getByTestId('lock-in').textContent).toBe('LOCK IN: Katana → Bo, Cy, Di'); // the 4th is refused
+    expect(screen.getByTestId('confirm-choice').textContent).toBe('Katana → Bo, Cy, Di'); // the 4th is refused
     await userEvent.click(within(picker).getByRole('button', { name: /Cy/ }));
-    expect(screen.getByTestId('lock-in').textContent).toBe('LOCK IN: Katana → Bo, Di');
+    expect(screen.getByTestId('confirm-choice').textContent).toBe('Katana → Bo, Di');
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'KATANA', targets: ['p2', 'p4'] }]);
   });
@@ -262,7 +262,7 @@ describe('Control panel: choosing, targeting and locking in', () => {
     mount(<ControlPanel />, store);
     await userEvent.click(button('BOMB'));
     expect(screen.queryByTestId('target-picker')).toBeNull();
-    expect(screen.getByText(/Bomb hits every opponent: Bo, Cy, Di/)).toBeTruthy();
+    expect(screen.getByText(/Hits every opponent: Bo, Cy, Di/)).toBeTruthy();
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'BOMB', targets: [] }]);
   });
@@ -367,8 +367,8 @@ describe('Keyboard: roving arrows, focus stability and optional shortcuts', () =
     await userEvent.keyboard('{Enter}');
     expect(button('SHIELD').getAttribute('aria-pressed')).toBe('true');
     await userEvent.keyboard('{Escape}');
-    // Escape handling is a Keyboard-mode shortcut; the explicit Clear button always works:
-    await userEvent.click(screen.getByRole('button', { name: /Clear/ }));
+    // Escape handling is a Keyboard-mode shortcut; the explicit Cancel button always works:
+    await userEvent.click(screen.getByRole('button', { name: /Cancel/ }));
     expect(button('SHIELD').getAttribute('aria-pressed')).toBe('false');
   });
 
@@ -393,7 +393,7 @@ describe('Keyboard: roving arrows, focus stability and optional shortcuts', () =
 
     await userEvent.click(button('GUN'));
     await userEvent.keyboard('2'); // second opponent: Cy
-    expect(screen.getByTestId('lock-in').textContent).toBe('LOCK IN: Gun → Cy');
+    expect(screen.getByTestId('confirm-choice').textContent).toBe('Gun → Cy');
     await userEvent.keyboard('l');
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'GUN', targets: ['p3'] }]);
   });
@@ -653,6 +653,7 @@ describe('Match Results & Series Standings modal', () => {
     const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
     const s = reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result });
     const store = stubStore({ ...s, game: { ...s.game!, series: { ...s.game!.series, seriesWinTarget: 5, matchWins: { p1: 4, p2: 2 } } } });
+    store.dispatch({ type: 'resolutionDismissed', turnId: store.getState().lastResult!.turnId }); // the turn popup was closed
     mount(<MatchResultsModal />, store);
     const user = userEvent.setup();
     const dialog = screen.getByRole('dialog', { name: /MATCH RESULTS/ });
@@ -675,5 +676,22 @@ describe('Return to lobby after the series', () => {
     s = reducer(s, { type: 'seriesAcknowledged' });
     expect(s).toMatchObject({ game: null, lastResult: null, seriesEnd: null });
     expect(s.lobby!.players).toHaveLength(2);
+  });
+});
+
+describe('Confirmation drawer (no scrolling to Lock In)', () => {
+  it('opens the moment a legal action is tapped with Confirm and Cancel; Cancel closes it', async () => {
+    const { store } = inGame(2, 1);
+    mount(<ControlPanel />, store);
+    expect(screen.queryByTestId('confirm-drawer')).toBeNull();
+    await userEvent.click(button('DODGE'));
+    const drawer = screen.getByTestId('confirm-drawer');
+    expect(within(drawer).getByRole('button', { name: /Confirm Action \[Lock In\]/ })).toBeTruthy();
+    expect(drawer.className).toContain('fixed'); // pinned to the viewport, so it is always on screen
+    await userEvent.click(within(drawer).getByRole('button', { name: /Cancel \/ Go Back/ }));
+    expect(screen.queryByTestId('confirm-drawer')).toBeNull();
+    await userEvent.click(button('DODGE'));
+    await userEvent.click(screen.getByTestId('lock-in'));
+    expect(store.commits).toEqual([{ kind: 'DEFENSE', defense: 'DODGE' }]);
   });
 });

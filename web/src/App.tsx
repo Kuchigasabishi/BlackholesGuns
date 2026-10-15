@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { TurnResolutionModal } from './components/TurnResolutionModal';
 import { GameScreen } from './screens/Game';
 import { codeFromLocation, HomeScreen } from './screens/Home';
 import { LobbyScreen } from './screens/Lobby';
@@ -79,6 +80,7 @@ function AppBody() {
         </div>
       )}
 
+      <TurnResolutionModal />
       {screen === 'home' && <HomeScreen initialCode={inviteCode} />}
       {screen === 'lobby' && <LobbyScreen />}
       {screen === 'game' && <GameScreen />}

@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SeriesResultModal } from '../src/components/SeriesResultModal';
-import { TurnBanner } from '../src/components/TurnBanner';
+import { TurnResolutionModal } from '../src/components/TurnResolutionModal';
 import { FX_TIMING, planTurn, stageAt } from '../src/format/fxPlan';
 import { FxTimelineProvider } from '../src/fx/FxTimeline';
 import { SettingsProvider, StoreProvider } from '../src/hooks';
-import { GameScreen, Roster } from '../src/screens/Game';
+import { GameScreen } from '../src/screens/Game';
 import { reducer } from '../src/state/reducer';
 import { CHARGE, attack, clientStateFor, defend, newGame, resultFor, stubStore, withCharges } from './fixtures';
 
@@ -70,25 +70,30 @@ describe('fxPlan (built from the canonical events)', () => {
   });
 });
 
-describe('in-line arena animation (no popup)', () => {
-  it('never opens a dialog for a turn result; emojis appear on the cards', () => {
+describe('Turn Resolution popup with the emoji clash timeline', () => {
+  it("opens a focused dialog with every acting player's card and a single Next turn button", () => {
     const game = three();
     const store = liveStore(game);
-    mount(<GameScreen />, store);
-    deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
+    mount(<TurnResolutionModal />, store);
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByTestId('action-emoji-p1').textContent).toBe('🔫');
-    expect(screen.getByTestId('action-emoji-p2').textContent).toBe('🛡️');
-    expect(screen.getByTestId('action-emoji-p3').textContent).toBe('⚡');
-    expect(screen.getByTestId('action-emoji-p3').className).toContain('anim-fx-charge'); // pulsing Charge
+    deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
+    const dialog = screen.getByRole('dialog', { name: 'TURN RESOLUTION' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(within(dialog).getByTestId('bf-p1').textContent).toContain('🔫');
+    expect(within(dialog).getByTestId('bf-p2').textContent).toContain('🛡️');
+    expect(within(dialog).getByTestId('bf-p3').textContent).toContain('⚡');
+    expect(within(dialog).getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByTestId('tr-next').textContent).toContain('Next turn');
+    expect(document.activeElement).toBe(screen.getByTestId('tr-next'));
   });
 
-  it('plays reveal, then a projectile card-to-card, then the shield clash, then settles', () => {
+  it('plays reveal, then the weapon flies card to card, then the shield clash, then settles with result tags', () => {
     const game = three();
     const store = liveStore(game);
-    mount(<Roster />, store);
+    mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
     expect(screen.queryByTestId('fx-projectile')).toBeNull(); // still revealing
+    expect(screen.getByTestId('bf-p3').querySelector('[data-testid="bf-action"]')!.className).toContain('anim-fx-charge'); // pulsing Charge
     advance(FX_TIMING.launch);
     const shot = screen.getByTestId('fx-projectile');
     expect(shot.textContent).toBe('🔫');
@@ -96,80 +101,100 @@ describe('in-line arena animation (no popup)', () => {
     expect(screen.queryByTestId('clash-p2')).toBeNull();
     advance(FX_TIMING.impact - FX_TIMING.launch);
     expect(screen.getByTestId('clash-p2').textContent).toBe('🛡️');
-    expect(screen.getByTestId('player-p2').getAttribute('data-fx')).toBe('clash');
+    expect(screen.getByTestId('bf-p2').getAttribute('data-fx')).toBe('clash');
+    expect(screen.queryByTestId('bf-results-p2')).toBeNull(); // text results wait for the animation
     advance(FX_TIMING.settle - FX_TIMING.impact);
     expect(screen.queryByTestId('fx-projectile')).toBeNull();
-    expect(screen.queryByTestId('clash-p2')).toBeNull();
+    expect(screen.getByTestId('bf-results-p2').textContent).toContain('[BLOCKED]');
   });
 
-  it('a landed attack shakes the victim and shows a damage overlay; eliminated text waits for the impact', () => {
+  it('a landed attack shakes the victim and shows a damage overlay before the [ELIMINATED] result', () => {
     const game = three();
     const store = liveStore(game);
-    mount(<Roster />, store);
+    mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: CHARGE });
-    expect(screen.getByTestId('badge-p2').textContent).not.toContain('ELIMINATED'); // static text lags the animation
     advance(FX_TIMING.impact);
-    expect(screen.getByTestId('player-p2').getAttribute('data-fx')).toBe('hit');
+    expect(screen.getByTestId('bf-p2').getAttribute('data-fx')).toBe('hit');
     expect(screen.getByTestId('damage-p2')).toBeTruthy();
-    expect(screen.getByTestId('badge-p2').textContent).not.toContain('ELIMINATED');
+    expect(screen.queryByTestId('tr-end')).toBeNull();
     advance(FX_TIMING.settle - FX_TIMING.impact);
-    expect(screen.getByTestId('badge-p2').textContent).toContain('ELIMINATED');
-    expect(screen.queryByTestId('damage-p2')).toBeNull();
+    expect(screen.getByTestId('bf-results-p2').textContent).toContain('[ELIMINATED]');
+    expect(screen.getByTestId('tr-end').textContent).toContain('ROUND OVER');
   });
 
-  it('own Charge and Match Wins update only when the animation settles', () => {
-    const game = withCharges(newGame(2), { p1: 1, p2: 1 });
+  it('Next turn closes it and it stays closed for that turn', () => {
+    const game = three();
     const store = liveStore(game);
-    mount(<Roster />, store);
-    deliver(store, game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
-    const card = () => screen.getByTestId('player-p1').textContent!;
-    expect(card()).toContain('⚡ 1');
-    expect(card()).toContain('🏆 0/10'); // the winner's +1 is not shown yet
-    expect(screen.getByTestId('badge-p2').textContent).not.toContain('ELIMINATED');
-    advance(FX_TIMING.settle);
-    expect(card()).toContain('🏆 1/10');
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: CHARGE, p2: CHARGE, p3: CHARGE });
+    act(() => screen.getByTestId('tr-next').click());
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('closes by itself when the next turn opens, so it never blocks play', () => {
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: CHARGE, p2: CHARGE, p3: CHARGE });
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    act(() => store.dispatch({ type: 'turnOpen', payload: { turnId: 'fx:m1:r1:t2', turnIndex: 2, phase: 'NORMAL', eligiblePlayerIds: ['p1', 'p2', 'p3'], deadlineAt: 1, serverTime: 1 }, receivedAt: 1 }));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('with reduced motion there is no animation: the finished picture shows immediately', () => {
     localStorage.setItem('bng.reducedMotion', '1');
     const game = three();
     const store = liveStore(game);
-    mount(<Roster />, store);
+    mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: CHARGE });
     expect(screen.queryByTestId('fx-projectile')).toBeNull();
-    expect(screen.getByTestId('badge-p2').textContent).toContain('ELIMINATED');
-    expect(screen.getByTestId('action-emoji-p1').className).not.toContain('anim-');
+    expect(screen.getByTestId('bf-results-p2').textContent).toContain('[ELIMINATED]');
+    expect(screen.getByTestId('bf-p1').querySelector('[data-testid="bf-action"]')!.className).not.toContain('anim-');
   });
 
   it('does not replay on reload: a result already in the snapshot shows settled', () => {
     const game = three();
     const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: CHARGE });
-    mount(<Roster />, stubStore(reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result })));
+    mount(<TurnResolutionModal />, stubStore(reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result })));
     expect(screen.queryByTestId('fx-projectile')).toBeNull();
-    expect(screen.getByTestId('badge-p2').textContent).toContain('ELIMINATED');
+    expect(screen.getByTestId('bf-results-p2').textContent).toContain('[ELIMINATED]');
   });
 
-  it('the round / match end banner is inline and appears after the animation settles', () => {
+  it('a match-ending turn shows the MATCH OVER result and a Match results button', () => {
     const game = withCharges(newGame(2), { p1: 1, p2: 1 });
     const store = liveStore(game);
-    mount(<TurnBanner />, store);
+    mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
-    expect(screen.queryByTestId('turn-banner')).toBeNull();
+    expect(screen.queryByTestId('tr-end')).toBeNull();
     advance(FX_TIMING.settle);
-    expect(screen.getByTestId('turn-banner').textContent).toContain('Ada wins the match! (+1 Match Win)');
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByTestId('tr-end').textContent).toContain('Ada wins the match! (+1 Match Win)');
+    expect(screen.getByTestId('tr-next').textContent).toContain('Match results');
+  });
+
+  it('the game screen has no Lock In button until an action is chosen, so nothing needs scrolling', () => {
+    mount(<GameScreen />, liveStore(three()));
+    expect(screen.queryByTestId('lock-in')).toBeNull();
   });
 });
 
 describe('series result dialog', () => {
-  it('shows after the final turn settles and Return to lobby clears the finished game', () => {
-    const game = withCharges(newGame(2), { p1: 1 });
+  it('waits for the turn popup, then shows; Return to lobby clears the finished game', () => {
+    const base = withCharges(newGame(2), { p1: 1 });
+    const game = { ...base, series: { ...base.series, matchWins: { p1: 9, p2: 0 } } }; // the next win is #10
     const store = liveStore(game);
-    mount(<SeriesResultModal />, store);
+    mount(
+      <>
+        <TurnResolutionModal />
+        <SeriesResultModal />
+      </>,
+      store,
+    );
     act(() => store.dispatch({ type: 'seriesEnded', winnerId: 'p1', matchWins: { p1: 3, p2: 1 } }));
     act(() => store.dispatch({ type: 'result', payload: resultFor(game, { p1: attack('GUN', 'p2'), p2: CHARGE }) }));
-    expect(screen.queryByRole('dialog')).toBeNull();
     advance(FX_TIMING.settle);
+    expect(screen.queryByTestId('series-result')).toBeNull(); // the turn popup is still open
+    expect(screen.getByTestId('tr-next').textContent).toContain('Series results');
+    act(() => screen.getByTestId('tr-next').click());
     expect(screen.getByTestId('sr-winner').textContent).toContain('Ada wins the series!');
     act(() => screen.getByTestId('sr-return').click());
     expect(screen.queryByRole('dialog')).toBeNull();

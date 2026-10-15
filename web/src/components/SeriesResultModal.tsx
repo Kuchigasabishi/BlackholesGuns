@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { trapTab } from '../a11y';
 import { useFx } from '../fx/FxTimeline';
 import { useGameState, useStore } from '../hooks';
-import { nameLookup } from '../state/reducer';
+import { nameLookup, turnModalOpen } from '../state/reducer';
 
 /**
  * The one remaining popup: the final series result, shown once the last turn's
@@ -16,7 +16,7 @@ export function SeriesResultModal() {
   const { seriesEnd, game, lastResult } = state;
   const dialog = useRef<HTMLDivElement>(null);
   const primary = useRef<HTMLButtonElement>(null);
-  const visible = seriesEnd !== null && game !== null && stage === 'settled';
+  const visible = seriesEnd !== null && game !== null && stage === 'settled' && !turnModalOpen(state);
 
   useEffect(() => {
     if (visible) primary.current?.focus();

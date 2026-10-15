@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { trapTab } from '../a11y';
 import { useFx } from '../fx/FxTimeline';
 import { useGameState } from '../hooks';
-import { nameLookup } from '../state/reducer';
+import { nameLookup, turnModalOpen } from '../state/reducer';
 
 const ORDINAL = ['1st', '2nd', '3rd'];
 const ordinal = (n: number) => ORDINAL[n - 1] ?? `${n}th`;
@@ -25,7 +25,7 @@ export function MatchResultsModal() {
 
   const outcome = lastResult?.outcome ?? null;
   const turnId = outcome?.turnId ?? null;
-  const visible = game !== null && outcome?.transition === 'MATCH_ENDED' && !!outcome.matchWinnerId && dismissed !== turnId && stage === 'settled';
+  const visible = game !== null && outcome?.transition === 'MATCH_ENDED' && !!outcome.matchWinnerId && dismissed !== turnId && stage === 'settled' && !turnModalOpen(state);
 
   useEffect(() => {
     if (!visible) return;

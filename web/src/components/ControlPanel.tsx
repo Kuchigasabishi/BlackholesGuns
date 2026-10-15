@@ -382,60 +382,74 @@ export function ControlPanel() {
         {hint}
       </p>
 
-      {/* Targets */}
-      {open && selection?.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode !== 'ALL_OPPONENTS' && (
-        <fieldset className="mt-3 rounded-lg border border-edge p-3" data-testid="target-picker">
-          <legend className="px-2 text-sm text-ink-dim">
-            {ATTACKS[selection.choice.weapon].targetMode === 'SINGLE'
-              ? `Choose 1 target for ${ATTACKS[selection.choice.weapon].name}`
-              : `Choose up to ${Math.min(MULTI_TARGET_LIMIT, opponents.length)} targets for ${ATTACKS[selection.choice.weapon].name}`}
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {opponents.map((id, i) => {
-              const on = selection.choice.kind === 'ATTACK' && selection.choice.targets.includes(id);
-              return (
-                <button key={id} type="button" aria-pressed={on} onClick={() => toggleTarget(id)} className={`bracket rounded-lg border px-3 py-2 ${on ? 'border-gold bg-gold/20 text-gold' : 'border-edge hover:bg-white/5'}`}>
-                  {keyboardMode && <span className="mr-1 text-ink-dim">{i + 1}</span>}
-                  {on ? '✔ ' : ''}
-                  {nameOf(id)}
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
+      {/* Locked / waiting status (the Lock In control itself lives in the confirmation drawer below). */}
+      {!open && (
+        <div className="mt-4">
+          {locked ? (
+            <p data-testid="locked-indicator" role="status" className="bracket rounded-lg border border-ok bg-ok/10 px-4 py-3 text-ok">
+              🔒 LOCKED{ownCommit ? `: ${choiceLabel(payloadToChoice(ownCommit), nameOf)}` : ''} — waiting for {Math.max(0, (turn?.eligiblePlayerIds.length ?? 0) - lockedPlayerIds.length)} more…
+            </p>
+          ) : (
+            <p className="text-ink-dim">{stage === 'BETWEEN_TURNS' ? 'Reveal in progress — the next turn opens shortly.' : 'Waiting for the next turn…'}</p>
+          )}
+        </div>
       )}
-      {open && selection?.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode === 'ALL_OPPONENTS' && (
-        <p className="mt-3 text-sm text-ink-dim">
-          {ATTACKS[selection.choice.weapon].name} hits every opponent: {opponents.map(nameOf).join(', ')}.
-        </p>
-      )}
+      {open && !selection && <p className="mt-3 text-sm text-ink-dim">Tap an action to choose it. You will confirm on the next step.</p>}
 
-      {/* Confirm / locked */}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        {open ? (
-          <>
-            <button
-              type="button"
-              data-testid="lock-in"
-              aria-disabled={!ready || sending}
-              onClick={() => void lockIn()}
-              className={`rounded-lg px-6 py-3 font-black ${ready ? 'bg-ok text-void hover:brightness-110' : 'cursor-not-allowed bg-ok/25 text-ink-dim'}`}
-            >
-              {selection ? `LOCK IN: ${choiceLabel(selection.choice, nameOf)}` : 'LOCK IN'}
-            </button>
-            <p className="text-sm text-ink-dim">{selection ? (ready ? 'Nobody sees your choice until everyone locks in.' : 'Pick your target(s) to continue.') : 'Select an action first.'}</p>
-            <button type="button" onClick={() => setSelection(null)} disabled={!selection} className="rounded-lg border border-edge px-4 py-2 text-ink-dim enabled:hover:text-ink disabled:opacity-40">
-              Clear (Esc)
-            </button>
-          </>
-        ) : locked ? (
-          <p data-testid="locked-indicator" role="status" className="bracket rounded-lg border border-ok bg-ok/10 px-4 py-3 text-ok">
-            🔒 LOCKED{ownCommit ? `: ${choiceLabel(payloadToChoice(ownCommit), nameOf)}` : ''} — waiting for {Math.max(0, (turn?.eligiblePlayerIds.length ?? 0) - lockedPlayerIds.length)} more…
-          </p>
-        ) : (
-          <p className="text-ink-dim">{stage === 'BETWEEN_TURNS' ? 'Reveal in progress — the next turn opens shortly.' : 'Waiting for the next turn…'}</p>
-        )}
-      </div>
+      {/* Confirmation drawer: appears as soon as a legal action is tapped, so nobody scrolls to lock in. */}
+      {open && selection && (
+        <div
+          role="dialog"
+          aria-label="Confirm your action"
+          data-testid="confirm-drawer"
+          className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-neon bg-void/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.6)] backdrop-blur"
+        >
+          <div className="mx-auto max-w-2xl space-y-2">
+            <p className="bracket text-center text-sm font-bold text-ink" data-testid="confirm-choice">
+              {choiceLabel(selection.choice, nameOf)}
+            </p>
+            {selection.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode !== 'ALL_OPPONENTS' && (
+              <fieldset className="rounded-lg border border-edge p-2" data-testid="target-picker">
+                <legend className="px-2 text-xs text-ink-dim">
+                  {ATTACKS[selection.choice.weapon].targetMode === 'SINGLE'
+                    ? `Choose 1 target for ${ATTACKS[selection.choice.weapon].name}`
+                    : `Choose up to ${Math.min(MULTI_TARGET_LIMIT, opponents.length)} targets for ${ATTACKS[selection.choice.weapon].name}`}
+                </legend>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {opponents.map((id, i) => {
+                    const on = selection.choice.kind === 'ATTACK' && selection.choice.targets.includes(id);
+                    return (
+                      <button key={id} type="button" aria-pressed={on} onClick={() => toggleTarget(id)} className={`bracket rounded-lg border px-3 py-2 text-sm ${on ? 'border-gold bg-gold/20 text-gold' : 'border-edge hover:bg-white/5'}`}>
+                        {keyboardMode && <span className="mr-1 text-ink-dim">{i + 1}</span>}
+                        {on ? '✔ ' : ''}
+                        {nameOf(id)}
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+            {selection.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode === 'ALL_OPPONENTS' && (
+              <p className="text-center text-xs text-ink-dim">Hits every opponent: {opponents.map(nameOf).join(', ')}.</p>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                data-testid="lock-in"
+                aria-disabled={!ready || sending}
+                onClick={() => void lockIn()}
+                className={`flex-1 rounded-lg px-4 py-3 font-black ${ready ? 'bg-ok text-void hover:brightness-110' : 'cursor-not-allowed bg-ok/25 text-ink-dim'}`}
+              >
+                Confirm Action [Lock In]
+              </button>
+              <button type="button" data-testid="cancel-action" onClick={() => setSelection(null)} className="rounded-lg border border-edge px-4 py-3 text-ink-dim hover:text-ink">
+                Cancel / Go Back
+              </button>
+            </div>
+            <p className="text-center text-xs text-ink-dim">{ready ? 'Nobody sees your choice until everyone locks in.' : 'Pick your target(s) to continue.'}</p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

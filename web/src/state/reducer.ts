@@ -47,6 +47,8 @@ export interface ClientState {
   readonly log: readonly TurnLog[];
   /** Set when a phase begins so the UI can warn once (§13). */
   readonly phaseNotice: Phase | null;
+  /** The turn whose Turn Resolution popup the player has closed (so it does not reopen). */
+  readonly resolutionDismissed: string | null;
   readonly seriesEnd: { readonly winnerId: PlayerId | null; readonly matchWins: Readonly<Record<PlayerId, number>> } | null;
   readonly error: string | null;
   readonly notice: string | null;
@@ -66,6 +68,7 @@ export const initialState: ClientState = {
   revealed: null,
   log: [],
   phaseNotice: null,
+  resolutionDismissed: null,
   seriesEnd: null,
   error: null,
   notice: null,
@@ -91,6 +94,7 @@ export type ClientAction =
   | { type: 'notice'; message: string | null }
   | { type: 'dismissPhaseNotice' }
   | { type: 'seriesAcknowledged' }
+  | { type: 'resolutionDismissed'; turnId: string }
   | { type: 'reset' };
 
 export const nameLookup = (state: Pick<ClientState, 'lobby'>): NameOf => {
@@ -160,6 +164,9 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
       }
       return { ...state, lobby: action.lobby };
     }
+
+    case 'resolutionDismissed':
+      return { ...state, resolutionDismissed: action.turnId };
 
     case 'seriesAcknowledged':
       return { ...state, game: null, lastResult: null, revealed: null, seriesEnd: null, log: [] };
@@ -266,6 +273,10 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
 }
 
 // ----------------------------------------------------------------- selectors
+
+/** True while the Turn Resolution popup is (or should be) on screen. Match / series results wait for it. */
+export const turnModalOpen = (state: ClientState): boolean =>
+  state.game !== null && state.lastResult !== null && state.revealed !== null && state.resolutionDismissed !== state.lastResult.turnId;
 
 export type Screen = 'home' | 'lobby' | 'game';
 

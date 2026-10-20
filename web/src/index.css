@@ -315,3 +315,50 @@ body {
 .anim-dissolve { animation: digitalDissolve 1s ease-in both; will-change: transform, opacity; }
 .dust-p { opacity: 0; animation: digitalDust 800ms ease-out both; will-change: transform, opacity; }
 .anim-dissolve-glow { opacity: 0; animation: dissolveGlow 1s ease-out both; will-change: transform, opacity; }
+
+/* "On Fire" streak aura for Series Standings rows. Streak 2: a pulsing warm-orange border glow. Streak 3+:
+   layered, flickering flames. Everything animates opacity / transform only (GPU-composited, so smooth on phones);
+   the glow and flames are drawn outside the row and never change its size. Reduced motion freezes them. */
+@keyframes fireAura {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+@keyframes burningFlame {
+  0% { transform: scale(1, 0.9) translateY(2px); opacity: 0.65; }
+  35% { transform: scale(0.97, 1.1) translateY(-1px); opacity: 0.95; }
+  70% { transform: scale(1.03, 0.98) translateY(1px); opacity: 0.8; }
+  100% { transform: scale(0.98, 1.14) translateY(-2px); opacity: 1; }
+}
+.fire-row { isolation: isolate; }
+.fire-row::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid rgb(255 150 40);
+  box-shadow: 0 0 12px 2px rgb(255 130 20 / 0.85), inset 0 0 8px rgb(255 130 20 / 0.5);
+  animation: fireAura 1.4s ease-in-out infinite;
+  will-change: opacity;
+}
+.fire-3::after { box-shadow: 0 0 18px 4px rgb(255 90 20 / 0.95), inset 0 0 12px rgb(255 120 20 / 0.7); animation-duration: 0.9s; }
+.flame {
+  position: absolute;
+  inset: -9px -4px -3px;
+  z-index: -1;
+  border-radius: 14px;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  filter: blur(3px);
+  will-change: transform, opacity;
+}
+.flame-a {
+  background: radial-gradient(ellipse 70% 90% at 50% 100%, #ffe066 0%, #ff9100 38%, #ff3d00 62%, transparent 80%);
+  animation: burningFlame 0.8s ease-in-out infinite alternate;
+}
+.flame-b {
+  background: radial-gradient(ellipse 85% 100% at 30% 100%, #ffb300 0%, #ff4d00 45%, #c62800 65%, transparent 82%), radial-gradient(ellipse 60% 90% at 78% 100%, #ff7a00 0%, #ff2d00 50%, transparent 78%);
+  animation: burningFlame 1.15s ease-in-out -0.4s infinite alternate;
+  opacity: 0.8;
+}

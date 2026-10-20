@@ -30,6 +30,16 @@ export function openTurn(round: Round, livingIds: readonly PlayerId[]): Turn {
   };
 }
 
+/**
+ * "On Fire" tracking: when a match is won, the winner's streak goes up by one and every other
+ * player's resets to 0 immediately.
+ */
+export function nextStreaks(lobby: readonly PlayerId[], previous: Readonly<Record<PlayerId, number>>, winnerId: PlayerId): Record<PlayerId, number> {
+  const out: Record<PlayerId, number> = {};
+  for (const id of lobby) out[id] = id === winnerId ? (previous[id] ?? 0) + 1 : 0;
+  return out;
+}
+
 export interface RoundStart {
   readonly series: Series;
   readonly matchIndex: number;
@@ -88,6 +98,7 @@ export function startRound(start: RoundStart): GameState {
       alive: alive.has(playerId),
       charge: 0,
       matchWins: matchWins[playerId] ?? 0,
+      currentMatchStreak: base.matchStreaks[playerId] ?? 0,
       connectionStatus: connection[playerId] ?? 'CONNECTED',
     };
   }
@@ -127,6 +138,7 @@ export function createSeries(config: CreateSeriesConfig): GameState {
     status: 'IN_PROGRESS',
     matchWins,
     seriesWinTarget,
+    matchStreaks: Object.fromEntries(playerIds.map((id) => [id, 0])),
     departed: [],
     currentMatchId: matchIdOf(seriesId, 1),
     matchIndex: 1,

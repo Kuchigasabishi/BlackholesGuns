@@ -7,7 +7,7 @@
  */
 import type { ConnectionStatus } from './types';
 import { deepFreeze } from './freeze';
-import { startRound } from './lifecycle';
+import { nextStreaks, startRound } from './lifecycle';
 import type { GameState, PlayerId, PlayerState } from './types';
 
 export type ForfeitTransition = 'NONE' | 'NEXT_ROUND' | 'MATCH_ENDED' | 'SERIES_ENDED';
@@ -38,11 +38,11 @@ export function forfeitPlayers(state: GameState, ids: readonly PlayerId[]): Forf
   const connection: Record<PlayerId, ConnectionStatus> = {};
   for (const id of lobby) connection[id] = state.players[id]!.connectionStatus;
 
-  const complete = (winnerId: PlayerId | null, matchWins: Readonly<Record<PlayerId, number>>): GameState => {
+  const complete = (winnerId: PlayerId | null, matchWins: Readonly<Record<PlayerId, number>>, matchStreaks = series.matchStreaks): GameState => {
     const players: Record<PlayerId, PlayerState> = {};
-    for (const id of lobby) players[id] = { ...state.players[id]!, alive: id === winnerId, matchWins: matchWins[id] ?? 0 };
+    for (const id of lobby) players[id] = { ...state.players[id]!, alive: id === winnerId, matchWins: matchWins[id] ?? 0, currentMatchStreak: matchStreaks[id] ?? 0 };
     return deepFreeze({
-      series: { ...series, status: 'COMPLETE' as const, matchWins, winnerId },
+      series: { ...series, status: 'COMPLETE' as const, matchWins, matchStreaks, winnerId },
       match: { ...state.match, status: 'COMPLETE', winnerId },
       round: { ...state.round, survivorIds: winnerId ? [winnerId] : [], noEliminationStreak: 0, phase: 'NORMAL', status: 'COMPLETE' },
       players,
@@ -59,8 +59,8 @@ export function forfeitPlayers(state: GameState, ids: readonly PlayerId[]): Forf
   // The quitters were already out of this match: just remember they have left.
   if (eliminatedIds.length === 0) return none(deepFreeze({ ...state, series }));
 
-  const nextMatch = (matchWins: Readonly<Record<PlayerId, number>>): GameState =>
-    startRound({ series, matchIndex: state.match.matchIndex + 1, roundIndex: 1, aliveIds: participants, matchWins, connection });
+  const nextMatch = (matchWins: Readonly<Record<PlayerId, number>>, matchStreaks = series.matchStreaks): GameState =>
+    startRound({ series: { ...series, matchStreaks }, matchIndex: state.match.matchIndex + 1, roundIndex: 1, aliveIds: participants, matchWins, connection });
 
   if (survivors.length >= 2) {
     const next = startRound({ series, matchIndex: state.match.matchIndex, roundIndex: state.match.roundIndex + 1, aliveIds: survivors, matchWins: series.matchWins, connection });
@@ -70,10 +70,11 @@ export function forfeitPlayers(state: GameState, ids: readonly PlayerId[]): Forf
   if (survivors.length === 1) {
     const winnerId = survivors[0]!;
     const matchWins = { ...series.matchWins, [winnerId]: (series.matchWins[winnerId] ?? 0) + 1 };
+    const matchStreaks = nextStreaks(lobby, series.matchStreaks, winnerId);
     if (matchWins[winnerId]! >= series.seriesWinTarget) {
-      return { state: complete(winnerId, matchWins), transition: 'SERIES_ENDED', matchWinnerId: winnerId, seriesWinnerId: winnerId, eliminatedIds };
+      return { state: complete(winnerId, matchWins, matchStreaks), transition: 'SERIES_ENDED', matchWinnerId: winnerId, seriesWinnerId: winnerId, eliminatedIds };
     }
-    return { state: nextMatch(matchWins), transition: 'MATCH_ENDED', matchWinnerId: winnerId, seriesWinnerId: null, eliminatedIds };
+    return { state: nextMatch(matchWins, matchStreaks), transition: 'MATCH_ENDED', matchWinnerId: winnerId, seriesWinnerId: null, eliminatedIds };
   }
 
   // Every living player quit: nobody wins the match; a fresh match starts for those who remain.

@@ -32,6 +32,8 @@ export interface Series {
   readonly matchIndex: number;
   /** Match Wins needed to win the series (host-configured before the series starts, then fixed). */
   readonly seriesWinTarget: number;
+  /** Consecutive Match Wins per player (see `PlayerState.currentMatchStreak`); persists across matches. */
+  readonly matchStreaks: Readonly<Record<PlayerId, number>>;
   /** Players who quit mid-series. They are eliminated and sit out every later match. */
   readonly departed: readonly PlayerId[];
   /** Set once a player reaches the series win target. */
@@ -68,6 +70,8 @@ export interface PlayerState {
   /** 0..MAX_CHARGE */
   readonly charge: number;
   readonly matchWins: number;
+  /** Consecutive Match Wins in this series ending with the latest match; 0 for everyone but the last match's winner. */
+  readonly currentMatchStreak: number;
   readonly connectionStatus: ConnectionStatus;
 }
 

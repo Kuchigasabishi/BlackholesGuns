@@ -12,7 +12,7 @@ import { MAX_CHARGE } from './constants';
 import { EngineError } from './errors';
 import { deepFreeze } from './freeze';
 import { actionCost, resolveEffectTargets, validateAction } from './legality';
-import { openTurn, startRound } from './lifecycle';
+import { nextStreaks, openTurn, startRound } from './lifecycle';
 import { lookupMatrix, matrixCellEffect } from './matrix';
 import { phaseFor } from './phase';
 import type {
@@ -255,6 +255,7 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
   // Exactly one survivor: match over.
   const winnerId = survivorIds[0]!;
   const matchWins = { ...state.series.matchWins, [winnerId]: (state.series.matchWins[winnerId] ?? 0) + 1 };
+  const matchStreaks = nextStreaks(state.series.lobby, state.series.matchStreaks, winnerId);
 
   if (matchWins[winnerId]! >= state.series.seriesWinTarget) {
     const players: Record<PlayerId, PlayerState> = {};
@@ -265,10 +266,11 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
         alive: id === winnerId,
         charge: chargeAfter.get(id) ?? before.charge,
         matchWins: matchWins[id] ?? 0,
+        currentMatchStreak: matchStreaks[id] ?? 0,
       };
     }
     const complete: GameState = {
-      series: { ...state.series, status: 'COMPLETE', matchWins, winnerId },
+      series: { ...state.series, status: 'COMPLETE', matchWins, matchStreaks, winnerId },
       match: { ...state.match, status: 'COMPLETE', winnerId },
       round: {
         ...state.round,
@@ -284,7 +286,7 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
   }
 
   const nextMatch = startRound({
-    series: state.series,
+    series: { ...state.series, matchStreaks },
     matchIndex: state.match.matchIndex + 1,
     roundIndex: 1,
     aliveIds: state.series.lobby.filter((id) => !state.series.departed.includes(id)),

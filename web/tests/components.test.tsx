@@ -758,3 +758,45 @@ describe('Mid-game exit controls', () => {
     expect(screen.getByTestId('notice-bar').textContent).toContain('returned everyone to the lobby');
   });
 });
+
+describe('On Fire streak aura on the Series Standings', () => {
+  const withStreaks = (store: StubStore, streaks: Record<string, number>) => {
+    const s = store.getState();
+    const players = Object.fromEntries(Object.entries(s.game!.players).map(([id, p]) => [id, { ...p, currentMatchStreak: streaks[id] ?? 0 }]));
+    store.set({ ...s, game: { ...s.game!, players } });
+  };
+
+  it('no aura at 0-1, an orange pulsing aura at 2, burning flames at 3+, and it clears when someone else wins', () => {
+    const store = inGame(3, 0).store;
+    mount(<GameScreen />, store);
+    const row = (id: string) => screen.getByTestId(`standing-${id}`);
+    act(() => withStreaks(store, { p1: 1 }));
+    expect(row('p1').getAttribute('data-fire')).toBeNull();
+    expect(screen.queryByTestId('streak-p1')).toBeNull();
+
+    act(() => withStreaks(store, { p1: 2 }));
+    expect(row('p1').getAttribute('data-fire')).toBe('fire-2');
+    expect(row('p1').className).toContain('fire-row');
+    expect(screen.queryByTestId('flames-p1')).toBeNull();
+    expect(screen.getByTestId('streak-p1').textContent).toContain('2-win streak'); // not colour alone
+
+    act(() => withStreaks(store, { p1: 3 }));
+    expect(row('p1').getAttribute('data-fire')).toBe('fire-3');
+    expect(screen.getByTestId('flames-p1')).toBeTruthy();
+    expect(screen.getByTestId('streak-p1').textContent).toContain('ON FIRE');
+
+    // another player wins the next match: the server resets p1 to 0 and the flames are removed
+    act(() => withStreaks(store, { p2: 1 }));
+    expect(row('p1').getAttribute('data-fire')).toBeNull();
+    expect(screen.queryByTestId('flames-p1')).toBeNull();
+    expect(screen.queryByTestId('streak-p1')).toBeNull();
+  });
+
+  it('the aura animates opacity / transform only', () => {
+    const css = readFileSync('web/src/index.css', 'utf8');
+    for (const k of ['fireAura', 'burningFlame']) {
+      const body = new RegExp(String.raw`@keyframes ${k} \{([\s\S]*?)\n\}`).exec(css)![1]!;
+      expect(body).not.toMatch(/box-shadow|background|filter|width|height|margin/);
+    }
+  });
+});

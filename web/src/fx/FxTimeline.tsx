@@ -1,24 +1,28 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { FX_TIMING, planTurn, type FxPlan, type FxStage } from '../format/fxPlan';
+import { buildSchedule, planTurn, type FxPlan, type FxStage, type Schedule } from '../format/fxPlan';
 import { useGameState, useSettings } from '../hooks';
 
 export interface FxState {
   readonly stage: FxStage;
   readonly plan: FxPlan | null;
+  readonly schedule: Schedule | null;
+  /** Milliseconds into the sequence; jumps from event to event (reveals, shakes, impacts, settle). */
+  readonly t: number;
 }
 
 /** Without a provider (or with reduced motion) everything is simply "settled": the finished picture. */
-const SETTLED: FxState = { stage: 'settled', plan: null };
+const SETTLED: FxState = { stage: 'settled', plan: null, schedule: null, t: 0 };
 const FxContext = createContext<FxState>(SETTLED);
 
 export const useFx = (): FxState => useContext(FxContext);
 
 /**
- * One shared clock for the in-line reveal / projectile / impact animations.
- * It starts when a NEW turn result arrives (never on a reload mid-pause), walks
- * reveal -> fly -> impact -> settled, and ends early if the next turn opens.
- * Everything that must wait for the animation (static charge / win / eliminated
- * text, round-over banners, the match results modal) reads `stage === 'settled'`.
+ * One shared clock for the staggered reveal / projectile / impact / screen-shake
+ * sequence. It starts when a NEW turn result arrives (never on a reload mid-pause),
+ * then wakes only at the moments something changes, using one short timeout per
+ * moment (a few per turn), so it never busy-loops or blocks the browser thread.
+ * It ends early if the next turn opens. Everything that must wait for the sequence
+ * (static results, the match / series dialogs) reads `stage === 'settled'`.
  */
 export function FxTimelineProvider({ children }: { children: ReactNode }) {
   const { lastResult, revealed } = useGameState();
@@ -26,27 +30,31 @@ export function FxTimelineProvider({ children }: { children: ReactNode }) {
   const turnId = lastResult?.turnId ?? null;
   const live = turnId !== null && revealed !== null;
   const seen = useRef<string | null>(turnId);
-  const [stage, setStage] = useState<FxStage>('settled');
   const [playing, setPlaying] = useState<string | null>(null);
+  const [t, setT] = useState(0);
+
+  const plan = useMemo(() => (lastResult && playing === lastResult.turnId ? planTurn(lastResult) : null), [lastResult, playing]);
+  const schedule = useMemo(() => (plan ? buildSchedule(plan) : null), [plan]);
 
   useLayoutEffect(() => {
     if (!live || reducedMotion || turnId === seen.current) {
-      setStage('settled');
       setPlaying(null);
       return;
     }
     seen.current = turnId;
+    setT(0);
     setPlaying(turnId);
-    setStage('reveal');
-    const timers = [
-      setTimeout(() => setStage('fly'), FX_TIMING.launch),
-      setTimeout(() => setStage('impact'), FX_TIMING.impact),
-      setTimeout(() => setStage('settled'), FX_TIMING.settle),
-    ];
-    return () => timers.forEach(clearTimeout);
   }, [turnId, live, reducedMotion]);
 
-  const plan = useMemo(() => (lastResult && playing === lastResult.turnId ? planTurn(lastResult) : null), [lastResult, playing]);
-  const value = useMemo<FxState>(() => (plan && stage !== 'settled' ? { stage, plan } : { stage: 'settled', plan: null }), [stage, plan]);
+  useLayoutEffect(() => {
+    if (!schedule) return;
+    const timers = schedule.times.filter((ms) => ms > 0).map((ms) => setTimeout(() => setT(ms), ms));
+    return () => timers.forEach(clearTimeout);
+  }, [schedule]);
+
+  const value = useMemo<FxState>(() => {
+    if (!plan || !schedule || t >= schedule.settleAt) return SETTLED;
+    return { stage: 'playing', plan, schedule, t };
+  }, [plan, schedule, t]);
   return <FxContext.Provider value={value}>{children}</FxContext.Provider>;
 }

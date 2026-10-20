@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { trapTab } from '../a11y';
 import { describeBattlefield, describeResolution, type BattleResult } from '../format/describeTurn';
 import { RESULT_EMOJI } from '../format/emoji';
-import { planTurn } from '../format/fxPlan';
+import { isAttackerRevealed, planTurn, reactionsAt, shakeTierAt } from '../format/fxPlan';
 import { useFx } from '../fx/FxTimeline';
 import { useGameState, useStore } from '../hooks';
 import { nameLookup, turnModalOpen } from '../state/reducer';
@@ -43,7 +43,7 @@ const NEXT_LABEL = {
 export function TurnResolutionModal() {
   const store = useStore();
   const state = useGameState();
-  const { stage, plan: livePlan } = useFx();
+  const { stage, schedule, t } = useFx();
   const { lastResult, game, session } = state;
   const arena = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
@@ -65,9 +65,11 @@ export function TurnResolutionModal() {
   const transition = outcome.transition;
   const cards = describeBattlefield(lastResult, nameOf);
   const breakdown = describeResolution(lastResult, nameOf);
-  const playing = livePlan !== null; // the animation timeline is still running
+  const playing = stage === 'playing' && schedule !== null; // the timed sequence is still running
   const settled = !playing;
   const animate = playing;
+  const reactions = playing ? reactionsAt(schedule, t) : {};
+  const shakeTier = playing ? shakeTierAt(schedule, t) : null;
   const dismiss = () => store.dispatch({ type: 'resolutionDismissed', turnId: lastResult.turnId });
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -80,7 +82,7 @@ export function TurnResolutionModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/85 p-2 sm:p-4" onKeyDown={onKeyDown}>
-      <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="tr-title" data-testid="turn-resolution" className="neon-box flex max-h-[95dvh] w-full max-w-3xl flex-col rounded-2xl border-2 border-neon">
+      <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="tr-title" data-testid="turn-resolution" data-shake={shakeTier ?? undefined} className={`${shakeTier ? `anim-shake-t${shakeTier}` : ''} neon-box flex max-h-[95dvh] w-full max-w-3xl flex-col rounded-2xl border-2 border-neon`}>
         <div className="border-b border-edge px-3 py-2 sm:px-6 sm:py-3">
           <h2 id="tr-title" className="font-display text-lg font-black text-neon sm:text-2xl">
             TURN RESOLUTION
@@ -93,9 +95,10 @@ export function TurnResolutionModal() {
             <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3" data-testid="battlefield">
               {cards.map((c) => {
                 const seat = game.series.lobby.indexOf(c.playerId);
-                const fx = fxPlan.cards[c.playerId];
-                const hitNow = playing && stage === 'impact' && fx?.reaction === 'HIT';
-                const clashNow = playing && stage === 'impact' && fx?.reaction === 'CLASH';
+                const faceUp = !playing || isAttackerRevealed(schedule, c.playerId, t);
+                const react = reactions[c.playerId];
+                const hitNow = faceUp && !!react?.hit;
+                const clashNow = faceUp && !react?.hit && !!react?.clashEmoji;
                 const isYou = c.playerId === session?.playerId;
                 return (
                   <li
@@ -103,8 +106,9 @@ export function TurnResolutionModal() {
                     data-testid={`bf-${c.playerId}`}
                     data-card-id={c.playerId}
                     data-eliminated={c.eliminated && settled}
+                    data-revealed={faceUp}
                     data-fx={hitNow ? 'hit' : clashNow ? 'clash' : undefined}
-                    aria-label={`${c.name}${isYou ? ' (you)' : ''}: ${c.label}${c.aimedAt.length ? ` aimed at ${c.aimedAt.join(', ')}` : ''}${c.eliminated ? ', eliminated' : ''}`}
+                    aria-label={faceUp ? `${c.name}${isYou ? ' (you)' : ''}: ${c.label}${c.aimedAt.length ? ` aimed at ${c.aimedAt.join(', ')}` : ''}${c.eliminated ? ', eliminated' : ''}` : `${c.name}: revealing`}
                     className={`relative flex flex-col items-center rounded-xl border-2 bg-void/60 px-1 pb-2 pt-2 text-center ${c.eliminated && settled ? 'border-danger' : 'border-edge'} ${isYou ? 'ring-2 ring-neon' : ''} ${animate && hitNow ? 'anim-fx-hit' : ''} ${animate && clashNow ? 'anim-fx-clash-card' : ''}`}
                   >
                     <p className="w-full truncate text-sm font-bold text-ink">
@@ -115,18 +119,18 @@ export function TurnResolutionModal() {
                     <span
                       data-testid="bf-action"
                       aria-hidden="true"
-                      className={`my-1 inline-block text-5xl leading-none sm:text-6xl ${c.eliminated && settled ? 'grayscale' : ''} ${animate ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
+                      className={`my-1 inline-block text-5xl leading-none sm:text-6xl ${c.eliminated && settled ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
                     >
-                      {c.emoji}
+                      {faceUp ? c.emoji : '❔'}
                     </span>
                     <p className="bracket text-xs font-bold text-ink">
-                      {c.label}
-                      {c.timedOut && <span className="ml-1 text-ink-dim">(auto)</span>}
+                      {faceUp ? c.label : '???'}
+                      {faceUp && c.timedOut && <span className="ml-1 text-ink-dim">(auto)</span>}
                     </p>
-                    {c.aimedAt.length > 0 && <p className="bracket text-[11px] text-ink-dim">→ {c.aimedAt.join(', ')}</p>}
-                    {clashNow && fx?.clashEmoji && (
+                    {faceUp && c.aimedAt.length > 0 && <p className="bracket text-[11px] text-ink-dim">→ {c.aimedAt.join(', ')}</p>}
+                    {clashNow && (
                       <span data-testid={`clash-${c.playerId}`} aria-hidden="true" className="anim-fx-clash pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-6xl">
-                        {fx.clashEmoji}
+                        {react?.clashEmoji}
                       </span>
                     )}
                     {hitNow && (

@@ -4,7 +4,7 @@ import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SeriesResultModal } from '../src/components/SeriesResultModal';
 import { TurnResolutionModal } from '../src/components/TurnResolutionModal';
-import { FX_TIMING, planTurn, stageAt } from '../src/format/fxPlan';
+import { FX_TIMING, buildSchedule, planTurn, reactionsAt, shakeTierAt } from '../src/format/fxPlan';
 import { FxTimelineProvider } from '../src/fx/FxTimeline';
 import { SettingsProvider, StoreProvider } from '../src/hooks';
 import { GameScreen } from '../src/screens/Game';
@@ -61,12 +61,46 @@ describe('fxPlan (built from the canonical events)', () => {
     expect(plan.cards.p2!.reaction).toBe('CLASH');
   });
 
-  it('the shared clock is ordered and finishes well inside the 4 s inter-turn pause', () => {
-    expect(FX_TIMING.reveal).toBeLessThan(FX_TIMING.launch);
-    expect(FX_TIMING.launch + FX_TIMING.flight).toBeLessThanOrEqual(FX_TIMING.impact);
-    expect(FX_TIMING.impact).toBeLessThan(FX_TIMING.settle);
-    expect(FX_TIMING.settle).toBeLessThan(4000);
-    expect([0, FX_TIMING.launch, FX_TIMING.impact, FX_TIMING.settle].map(stageAt)).toEqual(['reveal', 'fly', 'impact', 'settled']);
+  it('defenders and chargers are face-up at 0; attackers are revealed one by one, 700 ms apart', () => {
+    const game = withCharges(newGame(3), { p1: 1, p2: 1 });
+    const sched = buildSchedule(planTurn(resultFor(game, { p1: attack('GUN', 'p3'), p2: attack('KNIFE', 'p3'), p3: defend('SHIELD') })));
+    expect(sched.attackers.map((a) => [a.playerId, a.revealAt])).toEqual([['p1', FX_TIMING.lead], ['p2', FX_TIMING.lead + FX_TIMING.maxStep]]);
+    expect(sched.shots.every((x) => x.launchAt === sched.attackers.find((a) => a.playerId === x.shot.from)!.revealAt)).toBe(true);
+    expect(sched.settleAt).toBeGreaterThan(sched.shots.at(-1)!.impactAt);
+  });
+
+  it('compresses the step (never below the minimum) so even 7 attackers finish about inside the 4 s pause', () => {
+    const game = withCharges(newGame(8), { p1: 1, p2: 1, p3: 1, p4: 1, p5: 1, p6: 1, p7: 1 });
+    const acts: Parameters<typeof resultFor>[1] = { p8: defend('SHIELD') };
+    for (const id of ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']) acts[id] = attack('GUN', 'p8');
+    const sched = buildSchedule(planTurn(resultFor(game, acts)));
+    const gaps = sched.attackers.slice(1).map((a, i) => a.revealAt - sched.attackers[i]!.revealAt);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(FX_TIMING.minStep);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(FX_TIMING.shake); // one shake finishes before the next starts
+    expect(sched.settleAt).toBeLessThan(4200);
+  });
+
+  it.each([
+    ['GUN', 1],
+    ['GATLING_GUN', 2],
+    ['KATANA', 3],
+    ['BOMB', 4],
+    ['BLACKHOLE', 5],
+  ] as const)('%s shakes the screen at tier %i, for one 300 ms burst, then stops', (weapon, tier) => {
+    const game = withCharges(newGame(2), { p1: 5 });
+    const sched = buildSchedule(planTurn(resultFor(game, { p1: weapon === 'BLACKHOLE' || weapon === 'BOMB' ? attack(weapon) : attack(weapon, 'p2'), p2: CHARGE })));
+    const at = sched.attackers[0]!.revealAt;
+    expect(shakeTierAt(sched, at - 1)).toBeNull();
+    expect(shakeTierAt(sched, at)).toBe(tier);
+    expect(shakeTierAt(sched, at + FX_TIMING.shake - 1)).toBe(tier);
+    expect(shakeTierAt(sched, at + FX_TIMING.shake)).toBeNull();
+  });
+
+  it('reactionsAt only fires once a projectile has landed', () => {
+    const sched = buildSchedule(planTurn(resultFor(three(), { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE })));
+    const landing = sched.shots[0]!.impactAt;
+    expect(reactionsAt(sched, landing - 1).p2).toBeUndefined();
+    expect(reactionsAt(sched, landing).p2).toEqual({ hit: false, clashEmoji: '🛡️' });
   });
 });
 
@@ -79,6 +113,8 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
     const dialog = screen.getByRole('dialog', { name: 'TURN RESOLUTION' });
     expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(within(dialog).getByTestId('bf-p1').textContent).toContain('❔'); // the attacker is revealed after the lead-in
+    advance(FX_TIMING.lead);
     expect(within(dialog).getByTestId('bf-p1').textContent).toContain('🔫');
     expect(within(dialog).getByTestId('bf-p2').textContent).toContain('🛡️');
     expect(within(dialog).getByTestId('bf-p3').textContent).toContain('⚡');
@@ -87,25 +123,55 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     expect(document.activeElement).toBe(screen.getByTestId('tr-next'));
   });
 
-  it('plays reveal, then the weapon flies card to card, then the shield clash, then settles with result tags', () => {
+  it('reveals attackers one by one: face-down first, then the shake, the weapon flying and the shield clash', () => {
     const game = three();
     const store = liveStore(game);
     mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
-    expect(screen.queryByTestId('fx-projectile')).toBeNull(); // still revealing
-    expect(screen.getByTestId('bf-p3').querySelector('[data-testid="bf-action"]')!.className).toContain('anim-fx-charge'); // pulsing Charge
-    advance(FX_TIMING.launch);
+    const card = (id: string) => screen.getByTestId(`bf-${id}`);
+    expect(card('p2').getAttribute('data-revealed')).toBe('true'); // defenders and chargers are face-up at once
+    expect(card('p3').getAttribute('data-revealed')).toBe('true');
+    expect(card('p1').getAttribute('data-revealed')).toBe('false'); // the attacker is still face-down
+    expect(card('p1').textContent).toContain('❔');
+    expect(card('p3').querySelector('[data-testid="bf-action"]')!.className).toContain('anim-fx-charge'); // pulsing Charge
+    expect(screen.queryByTestId('fx-projectile')).toBeNull();
+    expect(screen.getByTestId('turn-resolution').getAttribute('data-shake')).toBeNull();
+
+    advance(FX_TIMING.lead);
+    expect(card('p1').getAttribute('data-revealed')).toBe('true');
+    expect(card('p1').textContent).toContain('🔫');
+    expect(screen.getByTestId('turn-resolution').getAttribute('data-shake')).toBe('1'); // Gun = tier 1
+    expect(screen.getByTestId('turn-resolution').className).toContain('anim-shake-t1');
     const shot = screen.getByTestId('fx-projectile');
     expect(shot.textContent).toBe('🔫');
     expect(shot.getAttribute('data-end')).toBe('BLOCKED');
     expect(screen.queryByTestId('clash-p2')).toBeNull();
-    advance(FX_TIMING.impact - FX_TIMING.launch);
+
+    advance(FX_TIMING.shake); // the shake ends and the window is back to rest
+    expect(screen.getByTestId('turn-resolution').getAttribute('data-shake')).toBeNull();
+    expect(screen.getByTestId('turn-resolution').className).not.toContain('anim-shake');
+
+    advance(FX_TIMING.flight - FX_TIMING.shake); // the shot lands on the shield
     expect(screen.getByTestId('clash-p2').textContent).toBe('🛡️');
-    expect(screen.getByTestId('bf-p2').getAttribute('data-fx')).toBe('clash');
-    expect(screen.queryByTestId('bf-results-p2')).toBeNull(); // text results wait for the animation
-    advance(FX_TIMING.settle - FX_TIMING.impact);
+    expect(card('p2').getAttribute('data-fx')).toBe('clash');
+    expect(screen.queryByTestId('bf-results-p2')).toBeNull(); // text results wait for the sequence
+
+    advance(FX_TIMING.tail);
     expect(screen.queryByTestId('fx-projectile')).toBeNull();
     expect(screen.getByTestId('bf-results-p2').textContent).toContain('[BLOCKED]');
+  });
+
+  it('two attackers are revealed 700 ms apart and the stronger weapon shakes harder', () => {
+    const game = withCharges(newGame(3), { p1: 1, p2: 3 });
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: attack('GUN', 'p3'), p2: attack('KATANA', 'p3'), p3: CHARGE });
+    advance(FX_TIMING.lead);
+    expect(screen.getByTestId('bf-p1').getAttribute('data-revealed')).toBe('true');
+    expect(screen.getByTestId('bf-p2').getAttribute('data-revealed')).toBe('false');
+    advance(FX_TIMING.maxStep);
+    expect(screen.getByTestId('bf-p2').getAttribute('data-revealed')).toBe('true');
+    expect(screen.getByTestId('turn-resolution').getAttribute('data-shake')).toBe('3'); // Katana = tier 3
   });
 
   it('a landed attack shakes the victim and shows a damage overlay before the [ELIMINATED] result', () => {
@@ -113,11 +179,11 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     const store = liveStore(game);
     mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: CHARGE });
-    advance(FX_TIMING.impact);
+    advance(FX_TIMING.lead + FX_TIMING.flight);
     expect(screen.getByTestId('bf-p2').getAttribute('data-fx')).toBe('hit');
     expect(screen.getByTestId('damage-p2')).toBeTruthy();
     expect(screen.queryByTestId('tr-end')).toBeNull();
-    advance(FX_TIMING.settle - FX_TIMING.impact);
+    advance(FX_TIMING.tail);
     expect(screen.getByTestId('bf-results-p2').textContent).toContain('[ELIMINATED]');
     expect(screen.getByTestId('tr-end').textContent).toContain('ROUND OVER');
   });
@@ -166,7 +232,7 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
     expect(screen.queryByTestId('tr-end')).toBeNull();
-    advance(FX_TIMING.settle);
+    advance(5000);
     expect(screen.getByTestId('tr-end').textContent).toContain('Ada wins the match! (+1 Match Win)');
     expect(screen.getByTestId('tr-next').textContent).toContain('Match results');
   });
@@ -191,7 +257,7 @@ describe('series result dialog', () => {
     );
     act(() => store.dispatch({ type: 'seriesEnded', winnerId: 'p1', matchWins: { p1: 3, p2: 1 } }));
     act(() => store.dispatch({ type: 'result', payload: resultFor(game, { p1: attack('GUN', 'p2'), p2: CHARGE }) }));
-    advance(FX_TIMING.settle);
+    advance(5000);
     expect(screen.queryByTestId('series-result')).toBeNull(); // the turn popup is still open
     expect(screen.getByTestId('tr-next').textContent).toContain('Series results');
     act(() => screen.getByTestId('tr-next').click());

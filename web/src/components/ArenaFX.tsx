@@ -98,16 +98,17 @@ function Flyer({ p, container }: { p: Projectile; container: RefObject<HTMLEleme
 
 /**
  * Projectile layer over the roster. Only mounted while a turn's animation is
- * playing; each projectile travels from the attacker's card bounding box to the
+ * playing; each projectile appears when its attacker is revealed and travels from the attacker's card bounding box to the
  * target's card bounding box. The static card reactions live on the cards.
  */
 export function ArenaFX({ container }: { container: RefObject<HTMLElement | null> }) {
-  const { stage, plan } = useFx();
-  if (!plan || (stage !== 'fly' && stage !== 'impact')) return null;
+  const { stage, schedule, t } = useFx();
+  if (!schedule || stage !== 'playing') return null;
+  const launched = schedule.shots.filter((s) => s.launchAt <= t);
   return (
     <div className="pointer-events-none absolute inset-0 z-20" aria-hidden="true" data-testid="arena-fx">
-      {plan.projectiles.map((p) => (
-        <Flyer key={p.key} p={p} container={container} />
+      {launched.map((s) => (
+        <Flyer key={s.shot.key} p={s.shot} container={container} />
       ))}
     </div>
   );

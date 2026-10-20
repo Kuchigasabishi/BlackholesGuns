@@ -170,3 +170,92 @@ body {
 .anim-fx-damage { animation: fx-damage-flash 600ms ease-out both; }
 .anim-fx-clash { animation: fx-clash-pop 650ms ease-out both; }
 .anim-fx-clash-card { animation: fx-card-pop 520ms ease-out both; }
+
+/* Tier power-up glow for affordable weapons / Reflects (tiers 1-5).
+   The glow lives on a pseudo-element and only animates opacity, so it never changes the button's
+   size or the layout and stays on the compositor (smooth at 60fps on phones). Intensity, size and
+   saturation come from the per-tier custom properties below. Reduced motion freezes the pulse
+   (the global rules above), leaving a static glow. */
+@keyframes pulseGlow {
+  0%, 100% { opacity: var(--glow-min); }
+  50% { opacity: 1; }
+}
+.power-up { position: relative; isolation: isolate; }
+.power-up::before,
+.power-up::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  will-change: opacity;
+  box-shadow: 0 0 var(--glow-blur) var(--glow-spread) var(--glow-color), inset 0 0 var(--glow-inner) var(--glow-color);
+  animation: pulseGlow var(--glow-speed) ease-in-out infinite;
+}
+.power-up::before { display: none; }
+.power-t1 { --glow-color: rgb(62 230 255 / 0.45); --glow-blur: 6px; --glow-spread: 0px; --glow-inner: 3px; --glow-min: 0.35; --glow-speed: 2.6s; border-color: rgb(62 230 255 / 0.7); }
+.power-t2 { --glow-color: rgb(62 230 255 / 0.7); --glow-blur: 10px; --glow-spread: 1px; --glow-inner: 6px; --glow-min: 0.4; --glow-speed: 2.2s; border-color: rgb(62 230 255 / 0.9); }
+.power-t3 { --glow-color: rgb(0 255 200 / 0.9); --glow-blur: 14px; --glow-spread: 2px; --glow-inner: 8px; --glow-min: 0.5; --glow-speed: 1.8s; border-color: rgb(0 255 200); }
+.power-t4 { --glow-color: rgb(255 150 40 / 0.95); --glow-blur: 22px; --glow-spread: 4px; --glow-inner: 12px; --glow-min: 0.55; --glow-speed: 1.4s; border-color: rgb(255 170 60); }
+.power-t5 { --glow-color: rgb(255 40 200 / 1); --glow-blur: 30px; --glow-spread: 6px; --glow-inner: 16px; --glow-min: 0.6; --glow-speed: 1s; border-color: rgb(255 80 220); }
+/* Tier 5: a second, cyan layer pulsing in counter-phase so the glow seems to shift colour. */
+.power-t5::before { display: block; --glow-color: rgb(80 240 255 / 1); animation-delay: -0.5s; }
+
+/* Tier-scaled screen shake for the Turn Resolution window. Each is one 300 ms burst built only from
+   transform: translate() rotate(), decaying back to exactly 0 so the window is centred again the moment
+   it ends (the class is removed by the timeline right after). Higher tiers move further, rotate more and
+   oscillate faster (more swings in the same 300 ms). Reduced motion disables them (global rules above). */
+@keyframes shake-t1 {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  25% { transform: translate(-2px, 1px) rotate(-0.3deg); }
+  50% { transform: translate(2px, -1px) rotate(0.3deg); }
+  75% { transform: translate(-1px, 0) rotate(-0.2deg); }
+}
+@keyframes shake-t2 {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  12% { transform: translate(-4px, 2px) rotate(-0.8deg); }
+  28% { transform: translate(4px, -2px) rotate(0.8deg); }
+  44% { transform: translate(-3px, 2px) rotate(-0.6deg); }
+  60% { transform: translate(3px, -1px) rotate(0.6deg); }
+  80% { transform: translate(-1px, 1px) rotate(-0.3deg); }
+}
+@keyframes shake-t3 {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  10% { transform: translate(-7px, 3px) rotate(-1.4deg); }
+  25% { transform: translate(7px, -4px) rotate(1.4deg); }
+  40% { transform: translate(-6px, 4px) rotate(-1.1deg); }
+  55% { transform: translate(5px, -3px) rotate(1deg); }
+  75% { transform: translate(-3px, 2px) rotate(-0.6deg); }
+  90% { transform: translate(1px, -1px) rotate(0.2deg); }
+}
+@keyframes shake-t4 {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  7% { transform: translate(-11px, 6px) rotate(-2.4deg); }
+  16% { transform: translate(10px, -8px) rotate(2.2deg); }
+  26% { transform: translate(-9px, -6px) rotate(-1.8deg); }
+  36% { transform: translate(11px, 5px) rotate(2.4deg); }
+  48% { transform: translate(-7px, 7px) rotate(-1.5deg); }
+  60% { transform: translate(6px, -5px) rotate(1.2deg); }
+  74% { transform: translate(-4px, 3px) rotate(-0.8deg); }
+  88% { transform: translate(2px, -1px) rotate(0.3deg); }
+}
+@keyframes shake-t5 {
+  0%, 100% { transform: translate(0, 0) rotate(0); }
+  4% { transform: translate(-16px, 9px) rotate(-4deg); }
+  10% { transform: translate(15px, -11px) rotate(3.6deg); }
+  16% { transform: translate(-14px, -9px) rotate(-3.2deg); }
+  23% { transform: translate(16px, 8px) rotate(4deg); }
+  30% { transform: translate(-12px, 11px) rotate(-3deg); }
+  38% { transform: translate(13px, -9px) rotate(3.2deg); }
+  46% { transform: translate(-10px, -7px) rotate(-2.4deg); }
+  55% { transform: translate(10px, 8px) rotate(2.4deg); }
+  65% { transform: translate(-7px, 5px) rotate(-1.6deg); }
+  76% { transform: translate(5px, -4px) rotate(1deg); }
+  88% { transform: translate(-2px, 2px) rotate(-0.4deg); }
+}
+.anim-shake-t1 { animation: shake-t1 300ms linear both; }
+.anim-shake-t2 { animation: shake-t2 300ms linear both; }
+.anim-shake-t3 { animation: shake-t3 300ms linear both; }
+.anim-shake-t4 { animation: shake-t4 300ms linear both; }
+.anim-shake-t5 { animation: shake-t5 300ms linear both; }

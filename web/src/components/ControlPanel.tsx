@@ -129,12 +129,15 @@ function MatrixTooltip({ id, icon, tip }: { id: string; icon: string; tip: Matri
  */
 function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why, onHint, onPick, tip }: ActionButtonProps) {
   const [tipOpen, setTipOpen] = useState(false);
+  // Affordable weapons / Reflects (cost 1-5) get a pulsing neon glow that escalates with the tier.
+  const power = enabled && cost >= 1 && cost <= 5 ? cost : 0;
   return (
     <span className="relative inline-flex" onMouseLeave={() => setTipOpen(false)}>
       <button
         type="button"
         data-action={id}
         data-kind={kind}
+        data-power={power || undefined}
         data-row={row}
         aria-disabled={!enabled}
         aria-pressed={selected}
@@ -155,6 +158,7 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
           } else onHint(why);
         }}
         className={[
+          power ? `power-up power-t${power}` : '',
           'bracket flex min-w-[7.5rem] items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold uppercase transition',
           enabled ? 'border-danger bg-danger/10 text-ink hover:bg-danger/25' : 'cursor-not-allowed border-dashed border-edge text-ink-dim opacity-40 grayscale',
           selected ? 'bg-gold/20 ring-2 ring-gold' : '',

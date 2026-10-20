@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
@@ -608,5 +609,38 @@ describe('Confirmation drawer (no scrolling to Lock In)', () => {
     await userEvent.click(button('DODGE'));
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'DEFENSE', defense: 'DODGE' }]);
+  });
+});
+
+describe('Tier power-up glow', () => {
+  it.each([0, 1, 2, 3, 4, 5])('at %i Charge only affordable weapons glow, at their own tier', (charge) => {
+    mount(<ControlPanel />, inGame(2, charge).store);
+    for (const id of ATTACK_IDS) {
+      const cost = ATTACKS[id].cost;
+      const glowing = button(id).classList.contains(`power-t${cost}`);
+      expect(glowing).toBe(cost <= charge);
+      expect(button(id).getAttribute('data-power')).toBe(cost <= charge ? String(cost) : null);
+    }
+    expect(button('CHARGE').classList.contains('power-up')).toBe(false);
+    expect(button('DODGE').classList.contains('power-up')).toBe(false);
+  });
+
+  it('Reflects glow with their tier, and the glow disappears when the Charge is spent', () => {
+    const { store } = inGame(2, 2);
+    mount(<ControlPanel />, store);
+    expect(button('DOUBLE_REFLECT').classList.contains('power-t2')).toBe(true);
+    expect(button('TRIPLE_REFLECT').classList.contains('power-up')).toBe(false);
+    const s = store.getState();
+    act(() => store.set({ ...s, availability: null, game: { ...s.game!, players: { ...s.game!.players, p1: { ...s.game!.players.p1!, charge: 0 } } } }));
+    expect(document.querySelectorAll('.power-up')).toHaveLength(0);
+  });
+
+  it('defines an escalating pulseGlow for all five tiers using opacity on a pseudo-element', () => {
+    const css = readFileSync('web/src/index.css', 'utf8');
+    expect(css).toContain('@keyframes pulseGlow');
+    const blur = [1, 2, 3, 4, 5].map((t) => Number(new RegExp(String.raw`\.power-t${t} \{[^}]*--glow-blur: (\d+)px`).exec(css)![1]));
+    expect([...blur].sort((a, b) => a - b)).toEqual(blur);
+    expect(new Set(blur).size).toBe(5);
+    expect(css).toMatch(/\.power-up::after[\s\S]*?animation: pulseGlow/);
   });
 });

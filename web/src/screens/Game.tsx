@@ -9,6 +9,7 @@ import { FXLayer } from '../components/FXLayer';
 import { SeriesResultModal } from '../components/SeriesResultModal';
 import { MatchResultsModal } from '../components/MatchResultsModal';
 import { actionTag } from '../format/describeTurn';
+import { useAudio, useTickingClock } from '../audio/useAudio';
 import { formatClock, useCountdown, useGameState, useSettings, useStore } from '../hooks';
 import { badgeOf, nameLookup, turnModalOpen, type Badge, type ClientState } from '../state/reducer';
 
@@ -27,10 +28,36 @@ const PHASE_HELP: Record<string, string> = {
 
 // ---------------------------------------------------------------- top status bar
 
+function VolumeControl() {
+  const { muted, volume, setMuted, setVolume } = useAudio();
+  return (
+    <span className="flex items-center gap-2" data-testid="volume-control">
+      <button type="button" aria-pressed={muted} aria-label={muted ? 'Unmute audio' : 'Mute audio'} data-testid="mute-toggle" onClick={() => setMuted(!muted)} className="text-lg leading-none">
+        <span aria-hidden="true">{muted || volume === 0 ? '🔇' : '🔊'}</span>
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={5}
+        value={Math.round(volume * 100)}
+        aria-label="Volume"
+        data-testid="volume-slider"
+        disabled={muted}
+        onChange={(e) => setVolume(Number(e.target.value) / 100)}
+        className="h-1 w-20 accent-[#3ee6ff] disabled:opacity-40"
+      />
+    </span>
+  );
+}
+
 export function TopBar() {
   const state = useGameState();
   const { game, turn, session, stage } = state;
   const seconds = useCountdown(turn?.deadlineAt ?? null, turn?.clockSkewMs ?? 0, stage === 'COMMIT');
+  const me = game && session ? game.players[session.playerId] : undefined;
+  const lockedIn = session ? state.ownCommit !== null || state.lockedPlayerIds.includes(session.playerId) : false;
+  useTickingClock(seconds, stage === 'COMMIT' && !lockedIn && !!me?.alive);
   if (!game || !session) return null;
 
   const phase = turn?.phase ?? game.round.phase;
@@ -46,6 +73,9 @@ export function TopBar() {
           [ COMMIT TIMER: {stage === 'COMMIT' ? formatClock(seconds) : '--:--'} ]
         </li>
         <li className={chip}>[ ALIVE: {alive} ]</li>
+        <li className={chip}>
+          <VolumeControl />
+        </li>
         <li className={chip} data-testid="series-target-chip">[ FIRST TO: {game.series.seriesWinTarget} WINS ]</li>
       </ul>
       {toSuddenDeath !== null && (

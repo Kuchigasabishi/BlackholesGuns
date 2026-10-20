@@ -30,6 +30,7 @@ const MIME: Record<string, string> = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.woff2': 'font/woff2',
+  '.wav': 'audio/wav',
   '.map': 'application/json; charset=utf-8',
 };
 
@@ -107,7 +108,7 @@ function serveStatic(res: ServerResponse, urlPath: string, staticDir: string): v
   if (!file || !existsSync(file)) return sendJson(res, 404, { error: 'Not found' });
   res.writeHead(200, {
     'content-type': MIME[extname(file)] ?? 'application/octet-stream',
-    'cache-control': file.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
+    'cache-control': file.includes(`${sep}assets${sep}`) ? 'public, max-age=31536000, immutable' : file.includes(`${sep}sounds${sep}`) ? 'public, max-age=86400' : 'no-cache',
   });
   createReadStream(file).pipe(res);
 }

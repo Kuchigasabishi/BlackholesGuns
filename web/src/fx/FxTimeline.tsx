@@ -1,4 +1,5 @@
 import { createContext, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { audio } from '../audio/AudioManager';
 import { buildSchedule, planTurn, type FxPlan, type FxStage, type Schedule } from '../format/fxPlan';
 import { useGameState, useSettings } from '../hooks';
 
@@ -51,6 +52,14 @@ export function FxTimelineProvider({ children }: { children: ReactNode }) {
     const timers = schedule.times.filter((ms) => ms > 0).map((ms) => setTimeout(() => setT(ms), ms));
     return () => timers.forEach(clearTimeout);
   }, [schedule]);
+
+  // Fire each impact's sounds at the exact moment the visual impact happens: `t` only ever changes at the
+  // schedule's own moments, so `impactAt === t` is exact. One timeout per moment, nothing polls.
+  useLayoutEffect(() => {
+    if (!schedule || t <= 0) return;
+    const due = new Set(schedule.shots.filter((s) => s.impactAt === t).flatMap((s) => s.shot.sounds));
+    due.forEach((id) => audio.play(id));
+  }, [schedule, t]);
 
   const value = useMemo<FxState>(() => {
     if (!plan || !schedule || t >= schedule.settleAt) return SETTLED;

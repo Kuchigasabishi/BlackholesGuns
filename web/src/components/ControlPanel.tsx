@@ -19,6 +19,7 @@ import {
 import { useGameState, useSettings, useStore } from '../hooks';
 import type { Choice } from '../net/store';
 import { attackTip, reflectTip, type MatrixTip } from '../format/matrixTip';
+import { audio } from '../audio/AudioManager';
 import { nameLookup } from '../state/reducer';
 
 const ATTACK_ICON: Record<AttackId, string> = {
@@ -254,6 +255,7 @@ export function ControlPanel() {
 
   const lockIn = useCallback(async () => {
     if (!selection || !targetsReady(selection.choice, opponents) || sending) return;
+    audio.stopTicking(); // silence the tension loop the instant Lock In is pressed
     setSending(true);
     try {
       await store.commit(selection.choice);
@@ -365,7 +367,10 @@ export function ControlPanel() {
           {DEFENSE_IDS.filter((id) => DEFENSES[id].cost === 0).map((id) =>
             btn(id, 'defense', 0, DEFENSES[id].name, DEFENSES[id].cost, DEFENSE_ICON[id], availability?.defenses[id], () => select({ kind: 'DEFENSE', defense: id })),
           )}
-          {btn('CHARGE', 'charge', 0, 'Charge +1', 0, '🔋', availability?.charge, () => select({ kind: 'CHARGE' }))}
+          {btn('CHARGE', 'charge', 0, 'Charge +1', 0, '🔋', availability?.charge, () => {
+            audio.chargeSurge(me?.charge ?? 0); // pitch rises with the Charge already held
+            select({ kind: 'CHARGE' });
+          })}
         </div>
 
         {TIERS.map((tier, i) => (

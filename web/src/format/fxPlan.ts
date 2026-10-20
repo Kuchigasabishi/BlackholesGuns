@@ -7,6 +7,7 @@
  */
 import { ATTACKS, type PlayerId } from '../../../src/engine';
 import type { TurnResultPayload } from '../../../src/server/protocol';
+import type { SoundId } from '../audio/sounds';
 import { actionEmoji } from './emoji';
 
 /**
@@ -57,6 +58,8 @@ export interface Projectile {
   readonly tier: number;
   /** The defense emoji that meets this projectile on the target's card, if any. */
   readonly clashEmoji: string | null;
+  /** Sounds fired at the exact moment of visual impact (see FxTimelineProvider). */
+  readonly sounds: readonly SoundId[];
 }
 
 export type CardReaction = 'HIT' | 'CLASH';
@@ -81,6 +84,21 @@ export interface FxPlan {
   readonly matchWinnerId: PlayerId | null;
 }
 
+/** Weapon vs Shield: clang. vs Dodge: whoosh. vs Reflect: ping (a reflected shot also eliminates its attacker). A kill: boom. */
+function soundsFor(end: ProjectileEnd, target: { kind: string; defense?: string }): SoundId[] {
+  switch (end) {
+    case 'BLOCKED':
+      return [target.defense === 'DODGE' ? 'whoosh' : target.defense === 'SHIELD' ? 'clang' : 'ping'];
+    case 'REFLECTED':
+      return ['ping', 'boom'];
+    case 'NEUTRALIZED':
+    case 'CLASH_LOST':
+      return ['clang'];
+    default:
+      return ['boom'];
+  }
+}
+
 export function planTurn(result: TurnResultPayload): FxPlan {
   const eliminated = new Set(result.outcome.eliminatedPlayerIds);
   const projectiles: Projectile[] = [];
@@ -99,7 +117,7 @@ export function planTurn(result: TurnResultPayload): FxPlan {
       end = 'HIT';
     }
     const clash = (end === 'BLOCKED' || end === 'REFLECTED') && ta.kind === 'DEFENSE' ? actionEmoji(ta) : null;
-    projectiles.push({ key: `${e.turnId}:${i}`, from: e.sourcePlayerId, to: e.selectedTargetId, emoji, end, tier: ATTACKS[e.sourceWeapon].cost, clashEmoji: clash });
+    projectiles.push({ key: `${e.turnId}:${i}`, from: e.sourcePlayerId, to: e.selectedTargetId, emoji, end, tier: ATTACKS[e.sourceWeapon].cost, clashEmoji: clash, sounds: soundsFor(end, ta) });
 
     if (end === 'HIT') reaction.set(e.selectedTargetId, 'HIT');
     if (clash) {

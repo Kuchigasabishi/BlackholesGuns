@@ -304,3 +304,9 @@ One container serves everything: the Node.js Socket.IO game server and the built
 | `DEV_HOOKS`, `DEV_TOKEN`, `TUNNEL` | never | Development only. Do not set in production. |
 
 **Notes:** room state lives in server memory, so run a single instance (do not scale replicas) and expect rooms to end when the service restarts or redeploys. There is still no authentication or rate limiting (see Known limitations).
+
+## Audio
+
+Sound effects are played through [Howler.js](https://howlerjs.com) by one `AudioManager` (`web/src/audio/`). All six sounds are created and preloaded once at start-up, so playing one never loads anything mid-game. Charging plays a surge whose pitch rises with the Charge held; clashes fire at the exact moment of visual impact (shield = clang, dodge = whoosh, reflect = ping, elimination = boom, in time with the digital-dust crumble); and the last 10 seconds of the commit timer tick faster and faster until the player locks in. The status bar has a mute button and volume slider (remembered per browser).
+
+The `.wav` files in `web/public/sounds/` are **procedurally synthesised placeholders** (`npm run generate:sounds`), not studio recordings. To use real assets, drop files with the same names there (or change the paths and format in `web/src/audio/sounds.ts` and `AudioManager.ts`).

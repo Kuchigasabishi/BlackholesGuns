@@ -3,6 +3,7 @@ import { TurnResolutionModal } from './components/TurnResolutionModal';
 import { GameScreen } from './screens/Game';
 import { codeFromLocation, HomeScreen } from './screens/Home';
 import { LobbyScreen } from './screens/Lobby';
+import { useAudioPreload } from './audio/useAudio';
 import { FxTimelineProvider, useFx } from './fx/FxTimeline';
 import { useGameState, useSettings } from './hooks';
 import { screenOf } from './state/reducer';
@@ -45,6 +46,7 @@ export function KeyboardHelp() {
 }
 
 function AppBody() {
+  useAudioPreload();
   const state = useGameState();
   const { reducedMotion, setReducedMotion, keyboardMode, setKeyboardMode } = useSettings();
   const [help, setHelp] = useState(false);

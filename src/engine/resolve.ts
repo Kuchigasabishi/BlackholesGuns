@@ -287,7 +287,7 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
     series: state.series,
     matchIndex: state.match.matchIndex + 1,
     roundIndex: 1,
-    aliveIds: state.series.lobby,
+    aliveIds: state.series.lobby.filter((id) => !state.series.departed.includes(id)),
     matchWins,
     connection,
   });

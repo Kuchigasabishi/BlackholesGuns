@@ -95,6 +95,7 @@ export type ClientAction =
   | { type: 'dismissPhaseNotice' }
   | { type: 'seriesAcknowledged' }
   | { type: 'resolutionDismissed'; turnId: string }
+  | { type: 'seriesAborted'; notice: string }
   | { type: 'reset' };
 
 export const nameLookup = (state: Pick<ClientState, 'lobby'>): NameOf => {
@@ -164,6 +165,24 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
       }
       return { ...state, lobby: action.lobby };
     }
+
+    case 'seriesAborted':
+      return {
+        ...state,
+        game: null,
+        turn: null,
+        stage: 'NONE',
+        availability: null,
+        lockedPlayerIds: [],
+        ownCommit: null,
+        lastResult: null,
+        revealed: null,
+        log: [],
+        phaseNotice: null,
+        resolutionDismissed: null,
+        seriesEnd: null,
+        notice: action.notice,
+      };
 
     case 'resolutionDismissed':
       return { ...state, resolutionDismissed: action.turnId };

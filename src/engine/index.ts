@@ -2,6 +2,7 @@ export * from './catalog';
 export * from './collision';
 export * from './constants';
 export * from './errors';
+export * from './forfeit';
 export * from './freeze';
 export * from './legality';
 export * from './lifecycle';

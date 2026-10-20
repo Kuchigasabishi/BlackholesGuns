@@ -3,7 +3,7 @@ import { TurnResolutionModal } from './components/TurnResolutionModal';
 import { GameScreen } from './screens/Game';
 import { codeFromLocation, HomeScreen } from './screens/Home';
 import { LobbyScreen } from './screens/Lobby';
-import { useAudioPreload } from './audio/useAudio';
+import { useAudioPreload, useBgm } from './audio/useAudio';
 import { FxTimelineProvider, useFx } from './fx/FxTimeline';
 import { useGameState, useSettings } from './hooks';
 import { screenOf } from './state/reducer';
@@ -53,6 +53,7 @@ function AppBody() {
   const fx = useFx();
   // After the final blow of a series the server already reports the lobby; keep the arena up until its animation settles.
   const screen = screenOf(state) === 'lobby' && state.game !== null && state.seriesEnd !== null && fx.stage !== 'settled' ? 'game' : screenOf(state);
+  useBgm(screen === 'game');
   const inviteCode = typeof window === 'undefined' ? '' : codeFromLocation(window.location.pathname);
 
   return (

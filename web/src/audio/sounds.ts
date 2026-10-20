@@ -10,6 +10,12 @@ export const SOUND_FILES: Readonly<Record<SoundId, { readonly src: string; reado
   tick: { src: '/sounds/tick.wav', volume: 0.55 },
 };
 
+/** Looping background music: a quiet ambient pad that fades in when a match starts and out when it ends. */
+export const BGM_FILE = '/sounds/bgm.wav';
+export const BGM_VOLUME = 0.15;
+export const BGM_FADE_IN_MS = 2000;
+export const BGM_FADE_OUT_MS = 800;
+
 /** Charging Surge: playback rate climbs 12% per Charge the player already holds (capped at 2x). */
 export const surgeRate = (charge: number): number => Math.min(2, 1 + 0.12 * Math.max(0, charge));
 

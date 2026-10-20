@@ -127,6 +127,7 @@ export function createSeries(config: CreateSeriesConfig): GameState {
     status: 'IN_PROGRESS',
     matchWins,
     seriesWinTarget,
+    departed: [],
     currentMatchId: matchIdOf(seriesId, 1),
     matchIndex: 1,
     winnerId: null,

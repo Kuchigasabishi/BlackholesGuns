@@ -8,6 +8,19 @@ export function useAudio(): AudioSnapshot & { setMuted: (m: boolean) => void; se
   return { ...snap, setMuted: (m) => audio.setMuted(m), setVolume: (v) => audio.setVolume(v) };
 }
 
+/** Background music plays while `active` (a match is running) and fades out when it is not. */
+export function useBgm(active: boolean): void {
+  useEffect(() => {
+    if (!active) return;
+    try {
+      audio.startBgm();
+    } catch {
+      /* audio unsupported */
+    }
+    return () => audio.stopBgm();
+  }, [active]);
+}
+
 /** Preloads every sound once when the app starts. */
 export function useAudioPreload(): void {
   useEffect(() => {

@@ -118,6 +118,7 @@ export function clientStateFor(game: GameState, playerId: PlayerId, over: Parame
 export interface StubStore extends GameStore {
   readonly commits: unknown[];
   readonly started: number;
+  readonly aborted: number;
   readonly targets: number[];
   set(state: ClientState): void;
 }
@@ -131,6 +132,7 @@ export function stubStore(initial: ClientState = initialState): StubStore {
   base.dispose();
   const commits: unknown[] = [];
   let started = 0;
+  let aborted = 0;
   const targets: number[] = [];
   const store: StubStore = {
     ...base,
@@ -138,6 +140,9 @@ export function stubStore(initial: ClientState = initialState): StubStore {
     targets,
     get started() {
       return started;
+    },
+    get aborted() {
+      return aborted;
     },
     getState: () => state,
     subscribe(l) {
@@ -162,6 +167,10 @@ export function stubStore(initial: ClientState = initialState): StubStore {
     },
     async setSeriesTarget(target: number) {
       targets.push(target);
+      return true;
+    },
+    async abortSeries() {
+      aborted++;
       return true;
     },
     async startGame() {

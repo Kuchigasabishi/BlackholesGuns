@@ -1,5 +1,6 @@
 import { ATTACKS } from '../../../src/engine';
 import { actionEmoji } from '../format/emoji';
+import { useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { Crumble, useCrumble } from '../components/Crumble';
 import { LockShader } from '../components/LockShader';
@@ -51,6 +52,67 @@ function VolumeControl() {
   );
 }
 
+/** In-game exit controls: the host can send everyone back to the lobby; everyone can quit. Both ask first. */
+export function MatchMenu() {
+  const store = useStore();
+  const { lobby, session } = useGameState();
+  const [ask, setAsk] = useState<'lobby' | 'quit' | null>(null);
+  if (!session) return null;
+  const isHost = lobby?.hostId === session.playerId;
+  const btn = 'bracket rounded border px-3 py-1 text-xs font-bold';
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-testid="match-menu">
+      {ask === null ? (
+        <>
+          {isHost && (
+            <button type="button" data-testid="return-lobby" onClick={() => setAsk('lobby')} className={`${btn} border-gold text-gold hover:bg-gold/10`}>
+              🏠 Return to Lobby
+            </button>
+          )}
+          <button type="button" data-testid="quit-match" onClick={() => setAsk('quit')} className={`${btn} border-danger text-danger hover:bg-danger/10`}>
+            🚪 Quit / Leave Match
+          </button>
+        </>
+      ) : (
+        <span role="alertdialog" aria-label="Confirm" data-testid="menu-confirm" className="flex flex-wrap items-center gap-2 text-sm text-ink">
+          {ask === 'lobby' ? 'End the match for everyone and return to the lobby?' : 'Leave now? You will be eliminated and cannot rejoin this series.'}
+          <button
+            type="button"
+            data-testid="menu-yes"
+            autoFocus
+            onClick={() => {
+              if (ask === 'lobby') void store.abortSeries();
+              else void store.leaveRoom();
+              setAsk(null);
+            }}
+            className={`${btn} border-danger bg-danger/20 text-danger`}
+          >
+            Yes
+          </button>
+          <button type="button" data-testid="menu-no" onClick={() => setAsk(null)} className={`${btn} border-edge text-ink-dim`}>
+            Cancel
+          </button>
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** A dismissible one-line message from the server (a player left, the host ended the match...). */
+export function NoticeBar() {
+  const store = useStore();
+  const { notice } = useGameState();
+  if (!notice) return null;
+  return (
+    <p role="status" data-testid="notice-bar" className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 px-3 py-2 text-sm text-gold">
+      {notice}
+      <button type="button" onClick={() => store.dispatch({ type: 'notice', message: null })} className="rounded border border-gold px-2 py-0.5 text-xs hover:bg-gold/20">
+        Dismiss
+      </button>
+    </p>
+  );
+}
+
 export function TopBar() {
   const state = useGameState();
   const { game, turn, session, stage } = state;
@@ -75,6 +137,9 @@ export function TopBar() {
         <li className={chip}>[ ALIVE: {alive} ]</li>
         <li className={chip}>
           <VolumeControl />
+        </li>
+        <li className="ml-auto">
+          <MatchMenu />
         </li>
         <li className={chip} data-testid="series-target-chip">[ FIRST TO: {game.series.seriesWinTarget} WINS ]</li>
       </ul>
@@ -220,6 +285,7 @@ export function GameScreen() {
       <SeriesResultModal />
       <MatchResultsModal />
       <TopBar />
+      <NoticeBar />
       <PhaseNotice />
       <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
         <div className="space-y-4">

@@ -32,6 +32,8 @@ export interface Series {
   readonly matchIndex: number;
   /** Match Wins needed to win the series (host-configured before the series starts, then fixed). */
   readonly seriesWinTarget: number;
+  /** Players who quit mid-series. They are eliminated and sit out every later match. */
+  readonly departed: readonly PlayerId[];
   /** Set once a player reaches the series win target. */
   readonly winnerId: PlayerId | null;
 }

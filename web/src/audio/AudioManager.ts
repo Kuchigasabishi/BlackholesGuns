@@ -1,5 +1,5 @@
 import { Howl, Howler } from 'howler';
-import { SOUND_FILES, TICK_BELOW_SECONDS, surgeRate, tickGapMs, tickRate, type SoundId } from './sounds';
+import { BGM_FADE_IN_MS, BGM_FADE_OUT_MS, BGM_FILE, BGM_VOLUME, SOUND_FILES, TICK_BELOW_SECONDS, surgeRate, tickGapMs, tickRate, type SoundId } from './sounds';
 
 const VOLUME_KEY = 'bng.volume';
 const MUTED_KEY = 'bng.muted';
@@ -33,6 +33,8 @@ const writeStored = (key: string, value: string): void => {
  */
 export class AudioManager {
   private sounds: Map<SoundId, Howl> | null = null;
+  private bgm: Howl | null = null;
+  private bgmStopTimer: ReturnType<typeof setTimeout> | null = null;
   private tickTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
   private snapshot: AudioSnapshot;
@@ -51,6 +53,7 @@ export class AudioManager {
       map.set(id, new Howl({ src: [f.src], format: ['wav'], volume: f.volume, preload: true }));
     }
     this.sounds = map;
+    this.bgm = new Howl({ src: [BGM_FILE], format: ['wav'], volume: 0, loop: true, preload: true });
   }
 
   play(id: SoundId, rate = 1): void {
@@ -94,6 +97,33 @@ export class AudioManager {
     return this.tickTimer !== null;
   }
 
+  // ------------------------------------------------------------- background music
+
+  /** Fades the looping BGM in to a quiet level (a match has started). The master mute / volume apply to it too. */
+  startBgm(): void {
+    this.preload();
+    const bgm = this.bgm!;
+    if (this.bgmStopTimer !== null) clearTimeout(this.bgmStopTimer);
+    this.bgmStopTimer = null;
+    if (!bgm.playing()) bgm.play();
+    bgm.fade(bgm.volume(), BGM_VOLUME, BGM_FADE_IN_MS);
+  }
+
+  /** Fades the BGM out and then stops it (back to the lobby / menu). Starting again cancels the pending stop. */
+  stopBgm(): void {
+    const bgm = this.bgm;
+    if (!bgm || !bgm.playing() || this.bgmStopTimer !== null) return;
+    bgm.fade(bgm.volume(), 0, BGM_FADE_OUT_MS);
+    this.bgmStopTimer = setTimeout(() => {
+      this.bgmStopTimer = null;
+      bgm.stop();
+    }, BGM_FADE_OUT_MS);
+  }
+
+  get bgmActive(): boolean {
+    return this.bgm?.playing() === true && this.bgmStopTimer === null;
+  }
+
   // ------------------------------------------------------------- mute / volume (observable)
 
   getSnapshot = (): AudioSnapshot => this.snapshot;
@@ -129,6 +159,10 @@ export class AudioManager {
   /** Stops the timer and releases every decoded buffer (tests / hot reload). */
   dispose(): void {
     this.stopTicking();
+    if (this.bgmStopTimer !== null) clearTimeout(this.bgmStopTimer);
+    this.bgmStopTimer = null;
+    this.bgm?.unload();
+    this.bgm = null;
     this.sounds?.forEach((h) => h.unload());
     this.sounds = null;
   }

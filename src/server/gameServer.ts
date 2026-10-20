@@ -169,6 +169,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     return {};
   });
 
+  const onAbort = handle((_payload, socket) => {
+    const { room, playerId } = requireBinding(socket);
+    room.abortSeries(playerId);
+    return {};
+  });
+
   const onLeave = handle((_payload, socket) => {
     const { room, playerId } = requireBinding(socket);
     socket.leave(roomChannel(room.code));
@@ -190,6 +196,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     socket.on(ClientEvents.resume, onResume(socket));
     socket.on(ClientEvents.start, onStart(socket));
     socket.on(ClientEvents.setSeriesTarget, onSetSeriesTarget(socket));
+    socket.on(ClientEvents.abort, onAbort(socket));
     socket.on(ClientEvents.leave, onLeave(socket));
     socket.on(ClientEvents.commit, onCommit(socket));
     socket.on('disconnect', () => {

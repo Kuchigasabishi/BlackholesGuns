@@ -43,6 +43,8 @@ export interface GameStore {
   createRoom(displayName: string): Promise<boolean>;
   joinRoom(roomCodeOrLink: string, displayName: string): Promise<boolean>;
   setSeriesTarget(target: number): Promise<boolean>;
+  /** Host only, mid-game: abort the series and send everyone back to the lobby. */
+  abortSeries(): Promise<boolean>;
   startGame(): Promise<boolean>;
   leaveRoom(): Promise<void>;
   commit(choice: Choice): Promise<boolean>;
@@ -55,7 +57,8 @@ const MESSAGES: Record<string, string> = {
   ROOM_NOT_FOUND: 'That room does not exist (or has closed). Check the code and try again.',
   ROOM_FULL: 'That room is full (8 players).',
   GAME_STARTED: 'That game has already started.',
-  NOT_HOST: 'Only the host can start the game.',
+  NOT_HOST: 'Only the host can do that.',
+  NO_GAME: 'There is no game in progress.',
   NOT_ENOUGH_PLAYERS: 'You need at least 2 players to start.',
   UNAFFORDABLE: 'You do not have enough Charge for that.',
   PHASE_RESTRICTED: 'That action is disabled in this phase.',
@@ -142,6 +145,10 @@ export function createGameStore(options: StoreOptions = {}): GameStore {
   socket.on(ServerEvents.stateSync, (p) => dispatch({ type: 'stateSync', state: p.state }));
   socket.on(ServerEvents.playerConnection, (p) => dispatch({ type: 'playerConnection', playerId: p.playerId, status: p.status }));
   socket.on(ServerEvents.seriesEnded, (p) => dispatch({ type: 'seriesEnded', winnerId: p.winnerId, matchWins: p.matchWins }));
+  socket.on(ServerEvents.seriesAborted, () => dispatch({ type: 'seriesAborted', notice: 'The host returned everyone to the lobby.' }));
+  socket.on(ServerEvents.playerQuit, (p) => {
+    if (p.playerId !== state.session?.playerId) dispatch({ type: 'notice', message: `${p.displayName} left the match and was eliminated.` });
+  });
   socket.on(ServerEvents.roomClosed, () => {
     saveSession(null);
     dispatch({ type: 'roomClosed' });
@@ -187,6 +194,12 @@ export function createGameStore(options: StoreOptions = {}): GameStore {
 
     async setSeriesTarget(target) {
       const ack = await request(ClientEvents.setSeriesTarget, { target });
+      if (!ack.ok) dispatch({ type: 'error', message: messageFor(ack.code, ack.message) });
+      return ack.ok;
+    },
+
+    async abortSeries() {
+      const ack = await request(ClientEvents.abort);
       if (!ack.ok) dispatch({ type: 'error', message: messageFor(ack.code, ack.message) });
       return ack.ok;
     },

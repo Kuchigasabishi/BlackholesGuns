@@ -19,6 +19,8 @@ export const ClientEvents = {
   /** Host only, lobby only: choose the Series Win Target. */
   setSeriesTarget: 'lobby:setSeriesTarget',
   start: 'game:start',
+  /** Host only, mid-game: abort the series and send everyone back to the lobby. */
+  abort: 'game:abort',
   commit: 'action:commit',
 } as const;
 
@@ -39,6 +41,10 @@ export const ServerEvents = {
   /** Developer state rewrite (dev mode only): clients should replace their state. */
   stateSync: 'state:sync',
   seriesEnded: 'series:ended',
+  /** The host aborted the series: everyone is back in the waiting lobby, scores discarded. */
+  seriesAborted: 'series:aborted',
+  /** A player quit mid-game and was eliminated (state arrives separately as state:sync). */
+  playerQuit: 'player:quit',
   roomClosed: 'room:closed',
 } as const;
 
@@ -51,6 +57,7 @@ export type RoomErrorCode =
   | 'INVALID_TOKEN'
   | 'NOT_HOST'
   | 'NOT_ENOUGH_PLAYERS'
+  | 'NO_GAME'
   | 'TURN_NOT_OPEN'
   | 'TURN_LOCKED'
   | 'LATE'

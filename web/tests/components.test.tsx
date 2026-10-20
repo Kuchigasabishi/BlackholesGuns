@@ -10,7 +10,7 @@ import { ControlPanel } from '../src/components/ControlPanel';
 import { StoreProvider, SettingsProvider } from '../src/hooks';
 import { LobbyScreen } from '../src/screens/Lobby';
 import { MatchResultsModal } from '../src/components/MatchResultsModal';
-import { GameScreen, PhaseNotice, Roster, TopBar } from '../src/screens/Game';
+import { GameScreen, MatchMenu, NoticeBar, PhaseNotice, Roster, TopBar } from '../src/screens/Game';
 import { initialState, reducer, screenOf } from '../src/state/reducer';
 import { CHARGE, attack, clientStateFor, defend, lobbyView, newGame, resultFor, stubStore, withCharges, withStreak, type StubStore } from './fixtures';
 
@@ -703,5 +703,58 @@ describe('Tier power-up glow', () => {
     expect([...blur].sort((a, b) => a - b)).toEqual(blur);
     expect(new Set(blur).size).toBe(5);
     expect(css).toMatch(/\.power-up::after[\s\S]*?animation: pulseGlow/);
+  });
+});
+
+describe('Mid-game exit controls', () => {
+  const asPlayer = (me: string) => {
+    const game = newGame(3);
+    let s = clientStateFor(game, me);
+    s = reducer(s, { type: 'lobby', lobby: lobbyView(3, { status: 'IN_GAME', hostId: 'p1' }) });
+    return stubStore(s);
+  };
+
+  it('the host sees Return to Lobby and Quit; everyone else sees only Quit', () => {
+    mount(<MatchMenu />, asPlayer('p1'));
+    expect(screen.getByTestId('return-lobby')).toBeTruthy();
+    expect(screen.getByTestId('quit-match')).toBeTruthy();
+    cleanup();
+    mount(<MatchMenu />, asPlayer('p2'));
+    expect(screen.queryByTestId('return-lobby')).toBeNull();
+    expect(screen.getByTestId('quit-match')).toBeTruthy();
+  });
+
+  it('Return to Lobby asks first, then tells the server to abort the series', async () => {
+    const store = asPlayer('p1');
+    mount(<MatchMenu />, store);
+    await userEvent.click(screen.getByTestId('return-lobby'));
+    expect(store.aborted).toBe(0); // not yet: needs confirmation
+    expect(screen.getByTestId('menu-confirm').textContent).toContain('return to the lobby');
+    await userEvent.click(screen.getByTestId('menu-no'));
+    expect(store.aborted).toBe(0);
+    await userEvent.click(screen.getByTestId('return-lobby'));
+    await userEvent.click(screen.getByTestId('menu-yes'));
+    expect(store.aborted).toBe(1);
+  });
+
+  it('Quit asks first, then leaves the room and returns to the home screen', async () => {
+    const store = asPlayer('p2');
+    mount(<MatchMenu />, store);
+    await userEvent.click(screen.getByTestId('quit-match'));
+    expect(screen.getByTestId('menu-confirm').textContent).toContain('eliminated');
+    expect(store.getState().session).not.toBeNull();
+    await userEvent.click(screen.getByTestId('menu-yes'));
+    expect(store.getState().session).toBeNull(); // reset -> home
+  });
+
+  it('the game screen carries the menu in the status bar, and the lobby abort clears the game with a notice', () => {
+    const store = asPlayer('p1');
+    mount(<GameScreen />, store);
+    expect(screen.getByTestId('match-menu')).toBeTruthy();
+    act(() => store.dispatch({ type: 'seriesAborted', notice: 'The host returned everyone to the lobby.' }));
+    expect(store.getState()).toMatchObject({ game: null, turn: null, seriesEnd: null });
+    cleanup();
+    mount(<NoticeBar />, store);
+    expect(screen.getByTestId('notice-bar').textContent).toContain('returned everyone to the lobby');
   });
 });

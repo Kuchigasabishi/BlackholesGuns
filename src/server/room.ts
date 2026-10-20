@@ -13,6 +13,7 @@ import {
   MIN_PLAYERS,
   createSeededRng,
   createSeries,
+  forfeitPlayers,
   SERIES_WIN_TARGET,
   SERIES_WIN_TARGET_OPTIONS,
   getActionAvailability,
@@ -236,6 +237,7 @@ export class Room {
   attach(playerId: PlayerId, token: string, socketId: string): void {
     const member = this.members.get(playerId);
     if (!member || member.token !== token) throw new RoomError('INVALID_TOKEN', 'Unknown player or bad token');
+    if (this.game?.series.departed.includes(playerId)) throw new RoomError('INVALID_TOKEN', 'You left this game');
     if (member.graceTimer) clearTimeout(member.graceTimer);
     member.graceTimer = null;
     member.socketId = socketId; // newest socket wins; a stale socket's later disconnect is ignored
@@ -260,11 +262,55 @@ export class Room {
     const member = this.members.get(playerId);
     if (!member) return;
     if (this.status === 'LOBBY') this.removeFromLobby(playerId);
-    else {
-      member.socketId = null;
-      this.setConnected(member, false);
-      this.checkEmpty();
+    else this.quitGame(member);
+  }
+
+  /**
+   * A player pressed Quit mid-game (as opposed to a dropped connection, which keeps the seat and relies on the
+   * §10 timeout rule). They are eliminated at once and sit out the series, the commit window restarts for the
+   * rest so nobody waits on them, and the host role moves on if the host was the one leaving.
+   */
+  private quitGame(member: Member): void {
+    const { playerId } = member;
+    if (this.game?.series.departed.includes(playerId)) return;
+    member.socketId = null;
+    if (member.graceTimer) clearTimeout(member.graceTimer);
+    member.graceTimer = null;
+    this.setConnected(member, false);
+
+    if (this.game && this.game.series.status === 'IN_PROGRESS' && this.game.turn) {
+      const result = forfeitPlayers(this.game, [playerId]);
+      this.game = result.state;
+      this.replayEntries.push({ type: 'OVERRIDE', reason: `quit:${playerId}`, state: this.game });
+      this.deps.emitter.toRoom(ServerEvents.playerQuit, { playerId, displayName: member.displayName });
+      this.deps.emitter.toRoom(ServerEvents.stateSync, { reason: 'quit', state: this.game });
+      if (result.transition === 'SERIES_ENDED') {
+        this.endSeries();
+      } else if (result.transition !== 'NONE' && this.stage === 'COMMIT') {
+        // A new round / match began: discard the old window (and any commits in it) and open the next turn now.
+        if (this.commitTimer) clearTimeout(this.commitTimer);
+        this.commitTimer = null;
+        this.openTurn();
+      }
     }
+
+    if (this.hostId === playerId) {
+      const left = this.game?.series.departed ?? [];
+      const next = [...this.members.values()].filter((m) => m.playerId !== playerId && !left.includes(m.playerId));
+      this.hostId = (next.find((m) => m.connected) ?? next[0])?.playerId ?? null;
+    }
+    this.deps.emitter.toRoom(ServerEvents.lobbyUpdate, this.lobbyView());
+    this.checkEmpty();
+  }
+
+  /** Host only: abort the running series. Everyone returns to the waiting lobby with the scores discarded. */
+  abortSeries(playerId: PlayerId): void {
+    if (this.status !== 'IN_GAME' || !this.game) throw new RoomError('NO_GAME', 'There is no game in progress');
+    if (playerId !== this.hostId) throw new RoomError('NOT_HOST', 'Only the host can return everyone to the lobby');
+    this.stage = 'NONE';
+    this.saveReplay();
+    this.deps.emitter.toRoom(ServerEvents.seriesAborted, { byPlayerId: playerId });
+    this.resetToLobby();
   }
 
   private removeFromLobby(playerId: PlayerId): void {
@@ -543,7 +589,12 @@ export class Room {
     this.stage = 'NONE';
     this.saveReplay();
     this.deps.emitter.toRoom(ServerEvents.seriesEnded, { winnerId: game.series.winnerId, matchWins: game.series.matchWins });
+    this.resetToLobby();
+  }
 
+  /** Discards the game / match / round / turn state and returns to the waiting lobby, keeping roster, host and target. */
+  private resetToLobby(): void {
+    const departed = this.game?.series.departed ?? [];
     for (const t of [this.commitTimer, this.nextTurnTimer]) if (t) clearTimeout(t);
     this.commitTimer = null;
     this.nextTurnTimer = null;
@@ -554,6 +605,11 @@ export class Room {
     this.replayEntries = [];
     this.savedEntryCount = -1;
     this.status = 'LOBBY';
+    for (const id of departed) {
+      const gone = this.members.get(id);
+      if (gone?.graceTimer) clearTimeout(gone.graceTimer);
+      this.members.delete(id); // players who quit are not carried into the next series
+    }
     for (const m of this.members.values()) {
       if (!m.connected && !m.graceTimer) m.graceTimer = setTimeout(() => this.removeFromLobby(m.playerId), this.deps.config.reconnectGraceMs);
     }

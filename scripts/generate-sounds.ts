@@ -25,7 +25,7 @@ const buffer = (seconds: number): Float32Array => new Float32Array(Math.floor(se
 const TAU = Math.PI * 2;
 
 /** Normalises to a safe peak and writes a 16-bit PCM mono WAV. */
-function save(name: string, data: Float32Array, peak = 0.9): void {
+function save(name: string, data: Float32Array, peak = 0.9, rate = RATE): void {
   let max = 0;
   for (const v of data) max = Math.max(max, Math.abs(v));
   const gain = max > 0 ? peak / max : 1;
@@ -36,8 +36,8 @@ function save(name: string, data: Float32Array, peak = 0.9): void {
   bytes.writeUInt32LE(16, 16);
   bytes.writeUInt16LE(1, 20);
   bytes.writeUInt16LE(1, 22);
-  bytes.writeUInt32LE(RATE, 24);
-  bytes.writeUInt32LE(RATE * 2, 28);
+  bytes.writeUInt32LE(rate, 24);
+  bytes.writeUInt32LE(rate * 2, 28);
   bytes.writeUInt16LE(2, 32);
   bytes.writeUInt16LE(16, 34);
   bytes.write('data', 36);
@@ -149,4 +149,41 @@ const fade = (i: number, n: number, ms = 6): number => Math.min(1, i / ((ms / 10
     d[i] = (Math.sin(TAU * 130 * t) * 1.1 + Math.sin(TAU * 1100 * t) * 0.35) * Math.exp(-t * 55) * Math.min(1, t / 0.0007);
   }
   save('tick.wav', d, 0.8);
+}
+
+// ---- bgm: a calm, seamlessly looping ambient pad (16 s) ----------------------------------
+// Every frequency is a multiple of 1/16 Hz and every envelope repeats within 16 s, so the loop point is
+// sample-exact: the file ends exactly where it began and `loop: true` has no click or gap.
+{
+  const BGM_RATE = 11_025;
+  const LOOP = 16;
+  const d = new Float32Array(LOOP * BGM_RATE);
+  const chord = [110, 130.8125, 164.8125, 246.9375]; // Am(add9)-ish drone
+  const bells: [number, number][] = [
+    [0, 659.25],
+    [3, 880],
+    [5.5, 784],
+    [8, 1046.5],
+    [11, 659.25],
+    [13.5, 587.3125],
+  ];
+  for (let i = 0; i < d.length; i++) {
+    const t = i / BGM_RATE;
+    let v = 0;
+    // slow breathing pad: two slightly detuned sines per note (a gentle chorus), each swelling on its own LFO
+    chord.forEach((f, k) => {
+      const swell = 0.55 + 0.45 * Math.sin(TAU * ((k + 1) / LOOP) * t + k);
+      v += (Math.sin(TAU * f * t) + Math.sin(TAU * (f + 0.125) * t)) * 0.16 * swell;
+    });
+    // sub bass with a soft pulse every 2 s
+    const pulse = 0.6 + 0.4 * Math.max(0, Math.sin(TAU * (t / 2) - 1.2)) ** 2;
+    v += (Math.sin(TAU * 55 * t) * 0.5 + Math.sin(TAU * 110 * t) * 0.12) * pulse;
+    // sparse bell notes, wrapped so a tail that crosses the loop point continues from the start
+    for (const [start, f] of bells) {
+      const dt = (t - start + LOOP) % LOOP;
+      v += Math.sin(TAU * f * dt) * Math.exp(-dt * 1.6) * 0.1 * Math.min(1, dt / 0.01);
+    }
+    d[i] = v;
+  }
+  save('bgm.wav', d, 0.8, BGM_RATE);
 }

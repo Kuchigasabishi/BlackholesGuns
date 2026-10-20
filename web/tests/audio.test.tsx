@@ -202,3 +202,65 @@ describe('Mute and volume control in the status bar', () => {
     expect(audio.ticking).toBe(false);
   });
 });
+
+describe('Background music', () => {
+  const bgm = () => (globalThis as unknown as { __bgm: import('./setup').BgmRecord }).__bgm;
+  beforeEach(() => {
+    audio.dispose();
+    Object.assign(bgm(), { playing: false, fades: [], volume: 0 });
+  });
+
+  it('is a seamless loop that fades in quietly (0.15) when a match starts and fades out and stops after', () => {
+    audio.startBgm();
+    expect(bgm().loop).toBe(true);
+    expect(bgm().playing).toBe(true);
+    expect(bgm().fades.at(-1)).toMatchObject({ to: 0.15, ms: 2000 });
+    audio.stopBgm();
+    expect(bgm().fades.at(-1)).toMatchObject({ to: 0, ms: 800 });
+    expect(bgm().playing).toBe(true); // still fading
+    advance(800);
+    expect(bgm().playing).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('starting again during a fade-out cancels the pending stop (no cut-off on rapid scene changes)', () => {
+    audio.startBgm();
+    audio.stopBgm();
+    advance(300);
+    audio.startBgm();
+    advance(2000);
+    expect(bgm().playing).toBe(true);
+    expect(audio.bgmActive).toBe(true);
+  });
+
+  it('follows the screens: plays in the game view, fades out in the lobby / home', async () => {
+    const { App } = await import('../src/App');
+    const { initialState, reducer } = await import('../src/state/reducer');
+    const { lobbyView } = await import('./fixtures');
+    let s = reducer(initialState, { type: 'session', session: { roomCode: 'K7M2QP', playerId: 'p1', playerToken: 't' } });
+    s = reducer(s, { type: 'lobby', lobby: lobbyView(2) });
+    const store = stubStore(s);
+    render(
+      <StoreProvider store={store}>
+        <SettingsProvider>
+          <App />
+        </SettingsProvider>
+      </StoreProvider>,
+    );
+    expect(bgm().playing).toBe(false); // lobby: silent
+    const game = newGame(2);
+    act(() => store.set(clientStateFor(game, 'p1')));
+    expect(bgm().playing).toBe(true); // match started
+    act(() => store.dispatch({ type: 'reset' }));
+    advance(800);
+    expect(bgm().playing).toBe(false); // back to the main menu
+  });
+
+  it('is silenced by the master mute (Howler.mute applies to every sound, BGM included)', async () => {
+    const { Howler } = await import('howler');
+    audio.setMuted(true);
+    expect(Howler.mute).toHaveBeenLastCalledWith(true);
+    audio.setMuted(false);
+    expect(Howler.mute).toHaveBeenLastCalledWith(false);
+  });
+});

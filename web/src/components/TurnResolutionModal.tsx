@@ -7,6 +7,7 @@ import { useFx } from '../fx/FxTimeline';
 import { useGameState, useStore } from '../hooks';
 import { nameLookup, turnModalOpen } from '../state/reducer';
 import { avatarFor } from './Avatar';
+import { Crumble } from './Crumble';
 import { ArenaFX } from './ArenaFX';
 
 const RESULT_STYLE: Record<BattleResult, string> = {
@@ -116,13 +117,15 @@ export function TurnResolutionModal() {
                       {c.name}
                       {isYou && <span className="bracket ml-1 text-[10px] text-gold">[YOU]</span>}
                     </p>
-                    <span
-                      data-testid="bf-action"
-                      aria-hidden="true"
-                      className={`my-1 inline-block text-5xl leading-none sm:text-6xl ${c.eliminated && settled ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
-                    >
-                      {faceUp ? c.emoji : '❔'}
-                    </span>
+                    <Crumble inline crumbling={playing && c.eliminated && faceUp && !!react?.hit}>
+                      <span
+                        data-testid="bf-action"
+                        aria-hidden="true"
+                        className={`my-1 inline-block text-5xl leading-none sm:text-6xl ${c.eliminated && settled ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
+                      >
+                        {faceUp ? c.emoji : '❔'}
+                      </span>
+                    </Crumble>
                     <p className="bracket text-xs font-bold text-ink">
                       {faceUp ? c.label : '???'}
                       {faceUp && c.timedOut && <span className="ml-1 text-ink-dim">(auto)</span>}

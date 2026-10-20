@@ -1,6 +1,7 @@
 import { ATTACKS } from '../../../src/engine';
 import { actionEmoji } from '../format/emoji';
 import { Avatar } from '../components/Avatar';
+import { Crumble, useCrumble } from '../components/Crumble';
 import { LockShader } from '../components/LockShader';
 import { ControlPanel } from '../components/ControlPanel';
 import { SeriesStandings } from '../components/SeriesStandings';
@@ -9,7 +10,7 @@ import { SeriesResultModal } from '../components/SeriesResultModal';
 import { MatchResultsModal } from '../components/MatchResultsModal';
 import { actionTag } from '../format/describeTurn';
 import { formatClock, useCountdown, useGameState, useSettings, useStore } from '../hooks';
-import { badgeOf, nameLookup, type Badge, type ClientState } from '../state/reducer';
+import { badgeOf, nameLookup, turnModalOpen, type Badge, type ClientState } from '../state/reducer';
 
 const BADGE_TEXT: Record<Badge, string> = { ELIMINATED: '[ELIMINATED]', READY: 'READY', HIDDEN: 'HIDDEN ?' };
 const BADGE_STYLE: Record<Badge, string> = {
@@ -95,11 +96,7 @@ function actionLine(state: ClientState, playerId: string, nameOf: (id: string) =
 export function Roster() {
   const state = useGameState();
   const { game, session } = state;
-  const { reducedMotion } = useSettings();
   if (!game || !session) return null;
-  const nameOf = nameLookup(state);
-  const eliminatedNow = new Set(state.lastResult?.outcome.eliminatedPlayerIds ?? []);
-  const animate = !reducedMotion;
 
   return (
     <section aria-labelledby="roster-h">
@@ -108,66 +105,73 @@ export function Roster() {
       </h2>
       <div className="relative" data-testid="arena">
         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="roster">
-          {game.series.lobby.map((id, seat) => {
-            const p = game.players[id]!;
-            const alive = p.alive;
-            const badge = badgeOf(state, id);
-            // Locked and loaded: this player has committed and the COMMIT window is still open.
-            const locked = state.stage === 'COMMIT' && alive && state.lockedPlayerIds.includes(id);
-            const line = actionLine(state, id, nameOf);
-            const justDied = state.revealed !== null && eliminatedNow.has(id);
-            const isOwn = id === session.playerId;
-            const wins = p.matchWins;
-            // §12 fog of war: only your own Charge is ever shown.
-            const ownCharge = p.charge;
-            const chargeDisplay = !alive ? '—' : isOwn ? String(ownCharge) : '?';
-            // The big action emoji sits on the card from the reveal on (static once the animation is over).
-            const emoji = state.revealed !== null ? revealedEmoji(state, id) : null;
-            return (
-              <li
-                key={id}
-                data-testid={`player-${id}`}
-                data-card-id={id}
-                data-eliminated={!alive}
-                aria-label={`${nameOf(id)}${isOwn ? ' (you)' : ''}, ${alive ? 'alive' : 'eliminated'}, ${isOwn ? `${ownCharge} charge` : 'charge hidden'}, ${wins} match wins`}
-                className={`neon-box relative flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''}`}
-              >
-                {line && (
-                  <span data-testid={`reveal-${id}`} className={`bracket absolute -top-3 left-1/2 w-max max-w-[96%] -translate-x-1/2 rounded border border-neon bg-void px-2 py-0.5 text-center text-xs leading-tight break-words text-neon ${animate ? 'anim-pop' : ''}`}>
-                    {line}
-                  </span>
-                )}
-                {emoji && (
-                  <span
-                    data-testid={`action-emoji-${id}`}
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute right-1 top-1 z-10 text-4xl leading-none drop-shadow-[0_0_8px_rgba(0,255,255,0.7)]`}
-                  >
-                    {emoji}
-                  </span>
-                )}
-                <LockShader active={locked} playerId={id} />
-                <div className={justDied && animate ? 'anim-ko' : ''}>
-                  <Avatar seat={seat} playerId={id} eliminated={!alive} />
-                </div>
-                <p className="mt-2 w-full truncate font-bold">
-                  {nameOf(id)}
-                  {isOwn && <span className="bracket ml-1 text-xs text-gold">[YOU]</span>}
-                </p>
-                <p className={`bracket text-sm ${isOwn ? 'text-gold' : 'text-ink-dim'}`} title={isOwn ? undefined : "Opponents' Charge is hidden"}>
-                  ⚡ {chargeDisplay} · 🏆 {wins}/{game.series.seriesWinTarget}
-                </p>
-                <p className={`bracket relative z-20 mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`} data-locked={locked || undefined}>
-                  <span aria-hidden="true">{locked ? '🔒' : BADGE_ICON[badge]} </span>
-                  {locked ? 'LOCKED' : BADGE_TEXT[badge]}
-                </p>
-                {p.connectionStatus === 'DISCONNECTED' && alive && <p className="bracket mt-1 text-xs text-danger">[OFFLINE]</p>}
-              </li>
-            );
-          })}
+          {game.series.lobby.map((id, seat) => (
+            <RosterCard key={id} id={id} seat={seat} state={state} />
+          ))}
         </ul>
       </div>
     </section>
+  );
+}
+
+function RosterCard({ id, seat, state }: { id: string; seat: number; state: ClientState }) {
+  const { game, session } = state;
+  const { reducedMotion } = useSettings();
+  const nameOf = nameLookup(state);
+  const p = game!.players[id]!;
+  const animate = !reducedMotion;
+  // A player eliminated by the turn that was just revealed keeps their "alive" face until the Turn Resolution
+  // popup is closed, then crumbles to digital dust (1 s) and only then snaps to the permanent grayscale state.
+  const diedThisTurn = state.revealed !== null && (state.lastResult?.outcome.eliminatedPlayerIds ?? []).includes(id);
+  const phase = useCrumble(diedThisTurn && !turnModalOpen(state), !p.alive && !diedThisTurn);
+  const held = animate && !p.alive && diedThisTurn && phase !== 'done';
+  const alive = p.alive || held;
+  const badge = held ? 'READY' : badgeOf(state, id);
+  // Locked and loaded: this player has committed and the COMMIT window is still open.
+  const locked = state.stage === 'COMMIT' && alive && state.lockedPlayerIds.includes(id);
+  const line = actionLine(state, id, nameOf);
+  const isOwn = id === session!.playerId;
+  const wins = p.matchWins;
+  // §12 fog of war: only your own Charge is ever shown.
+  const chargeDisplay = !alive ? '—' : isOwn ? String(held ? (state.lastResult?.outcome.playerResults.find((r) => r.playerId === id)?.chargeBefore ?? p.charge) : p.charge) : '?';
+  // The big action emoji sits on the card from the reveal on.
+  const emoji = state.revealed !== null ? revealedEmoji(state, id) : null;
+  return (
+    <li
+      data-testid={`player-${id}`}
+      data-card-id={id}
+      data-eliminated={!alive}
+      data-crumble={phase === 'crumbling' || undefined}
+      aria-label={`${nameOf(id)}${isOwn ? ' (you)' : ''}, ${alive ? 'alive' : 'eliminated'}, ${isOwn ? `${chargeDisplay} charge` : 'charge hidden'}, ${wins} match wins`}
+      className={`neon-box relative flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''}`}
+    >
+      {line && (
+        <span data-testid={`reveal-${id}`} className={`bracket absolute -top-3 left-1/2 w-max max-w-[96%] -translate-x-1/2 rounded border border-neon bg-void px-2 py-0.5 text-center text-xs leading-tight break-words text-neon ${animate ? 'anim-pop' : ''}`}>
+          {line}
+        </span>
+      )}
+      {emoji && (
+        <span data-testid={`action-emoji-${id}`} aria-hidden="true" className="pointer-events-none absolute right-1 top-1 z-10 text-4xl leading-none drop-shadow-[0_0_8px_rgba(0,255,255,0.7)]">
+          {emoji}
+        </span>
+      )}
+      <LockShader active={locked} playerId={id} />
+      <Crumble crumbling={phase === 'crumbling'}>
+        <Avatar seat={seat} playerId={id} eliminated={!alive} />
+      </Crumble>
+      <p className="mt-2 w-full truncate font-bold">
+        {nameOf(id)}
+        {isOwn && <span className="bracket ml-1 text-xs text-gold">[YOU]</span>}
+      </p>
+      <p className={`bracket text-sm ${isOwn ? 'text-gold' : 'text-ink-dim'}`} title={isOwn ? undefined : "Opponents' Charge is hidden"}>
+        ⚡ {chargeDisplay} · 🏆 {wins}/{game!.series.seriesWinTarget}
+      </p>
+      <p className={`bracket relative z-20 mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`} data-locked={locked || undefined}>
+        <span aria-hidden="true">{locked ? '🔒' : BADGE_ICON[badge]} </span>
+        {locked ? 'LOCKED' : BADGE_TEXT[badge]}
+      </p>
+      {p.connectionStatus === 'DISCONNECTED' && alive && <p className="bracket mt-1 text-xs text-danger">[OFFLINE]</p>}
+    </li>
   );
 }
 

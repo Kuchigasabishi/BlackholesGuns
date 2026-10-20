@@ -183,7 +183,11 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     expect(screen.getByTestId('bf-p2').getAttribute('data-fx')).toBe('hit');
     expect(screen.getByTestId('damage-p2')).toBeTruthy();
     expect(screen.queryByTestId('tr-end')).toBeNull();
-    advance(FX_TIMING.tail);
+    expect(screen.getByTestId('bf-p2').querySelector('[data-testid="digital-dust"]')).toBeTruthy(); // the eliminated card crumbles
+    advance(FX_TIMING.dissolve - 1);
+    expect(screen.queryByTestId('bf-results-p2')).toBeNull(); // permanent state waits for the dust to finish
+    advance(1);
+    expect(screen.queryByTestId('digital-dust')).toBeNull();
     expect(screen.getByTestId('bf-results-p2').textContent).toContain('[ELIMINATED]');
     expect(screen.getByTestId('tr-end').textContent).toContain('ROUND OVER');
   });

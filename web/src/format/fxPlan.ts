@@ -24,6 +24,8 @@ export const FX_TIMING = {
   flight: 650,
   /** After the last impact: static text (eliminated, results) appears once this has passed. */
   tail: 700,
+  /** An eliminated card's digital-dust destruction; the sequence waits for it before settling. */
+  dissolve: 1000,
   /** Length of one screen shake. */
   shake: 300,
   /** Total budget the schedule tries to stay inside. */
@@ -176,7 +178,8 @@ export function buildSchedule(plan: FxPlan): Schedule {
     for (const shot of mine) shots.push({ shot, launchAt: revealAt, impactAt: revealAt + flightOf(shot.end) });
   });
   const lastImpact = shots.reduce<number>((m, s) => Math.max(m, s.impactAt), FX_TIMING.lead);
-  const settleAt = lastImpact + FX_TIMING.tail;
+  const anyElimination = Object.values(plan.cards).some((c) => c.eliminated);
+  const settleAt = lastImpact + (anyElimination ? FX_TIMING.dissolve : FX_TIMING.tail);
   const times = [...new Set([0, settleAt, ...attackers.flatMap((a) => [a.revealAt, a.revealAt + FX_TIMING.shake]), ...shots.map((s) => s.impactAt)])].sort((a, b) => a - b);
   return { attackers, shots, settleAt, times };
 }

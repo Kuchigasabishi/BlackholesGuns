@@ -470,7 +470,36 @@ describe('Roster: status badges and colour-independent elimination', () => {
     expect(css).toContain('repeating-conic-gradient');
   });
 
+  it('a freshly eliminated player crumbles to digital dust for 1 s after the popup closes, then snaps to grayscale', () => {
+    vi.useFakeTimers();
+    try {
+      const game = withCharges(newGame(3), { p1: 1 });
+      const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: defend('DODGE') });
+      const store = stubStore(reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result }));
+      mount(<Roster />, store);
+      const card = () => screen.getByTestId('player-p2');
+      // The popup is still open: the card keeps its alive face.
+      expect(card().getAttribute('data-eliminated')).toBe('false');
+      expect(screen.getByTestId('badge-p2').textContent).not.toContain('ELIMINATED');
+      expect(screen.queryByTestId('digital-dust')).toBeNull();
+      // Popup closed: the dust animation plays.
+      act(() => store.dispatch({ type: 'resolutionDismissed', turnId: result.turnId }));
+      expect(card().getAttribute('data-crumble')).toBe('true');
+      expect(screen.getByTestId('digital-dust').querySelectorAll('.dust-p')).toHaveLength(16);
+      expect(card().getAttribute('data-eliminated')).toBe('false'); // not grayscale yet
+      act(() => void vi.advanceTimersByTime(1000));
+      expect(card().getAttribute('data-eliminated')).toBe('true');
+      expect(card().getAttribute('data-crumble')).toBeNull();
+      expect(screen.queryByTestId('digital-dust')).toBeNull();
+      expect(screen.getByTestId('badge-p2').textContent).toContain('[ELIMINATED]');
+      expect(screen.getByTestId('player-p3').getAttribute('data-eliminated')).toBe('false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('eliminated players get an explicit [ELIMINATED] text label, a greyscale avatar and a cross mark', () => {
+    localStorage.setItem('bng.reducedMotion', '1'); // no animation: straight to the final state
     const game = withCharges(newGame(3), { p1: 1 });
     const result = resultFor(game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: defend('DODGE') });
     const s = reducer(clientStateFor(game, 'p1'), { type: 'result', payload: result });

@@ -290,3 +290,28 @@ body {
 }
 .lock-shader-in { animation: lock-fade-in 200ms ease-out both; }
 .lock-shader-out { animation: lock-fade-out 250ms ease-in both; }
+
+/* "Digital dust" elimination (1 s). The avatar fractures behind a clip-path mask while fading and drifting up,
+   16 square fragments scatter upward/outward, and a red glow bursts then fades to nothing. Fragments and glow
+   animate transform + opacity only. When the animation ends the card snaps to its permanent grayscale state.
+   Reduced motion disables all of it (global rules above) and goes straight to the final state. */
+@keyframes digitalDissolve {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%); }
+  18% { opacity: 1; transform: translate(3px, -1px) scale(1.04) skewX(-3deg); clip-path: polygon(0 0, 40% 0, 46% 22%, 58% 18%, 62% 0, 100% 0, 100% 100%, 0 100%); }
+  38% { opacity: 0.85; transform: translate(-3px, -3px) scale(1.02) skewX(3deg); clip-path: polygon(0 12%, 34% 12%, 40% 40%, 70% 34%, 100% 20%, 100% 100%, 55% 100%, 48% 82%, 0 90%); }
+  62% { opacity: 0.5; transform: translate(2px, -8px) scale(0.96); clip-path: polygon(0 40%, 30% 36%, 48% 52%, 78% 44%, 100% 56%, 100% 100%, 0 100%); }
+  100% { opacity: 0; transform: translate(0, -18px) scale(0.82); clip-path: polygon(0 100%, 100% 100%, 100% 100%, 0 100%); }
+}
+@keyframes digitalDust {
+  0% { opacity: 0; transform: translate(0, 0) scale(1); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.2) rotate(90deg); }
+}
+@keyframes dissolveGlow {
+  0% { opacity: 0; transform: scale(0.9); box-shadow: 0 0 6px 2px rgb(255 59 92 / 0.9); }
+  20% { opacity: 1; transform: scale(1.05); box-shadow: 0 0 22px 8px rgb(255 59 92 / 0.95), inset 0 0 14px 4px rgb(255 59 92 / 0.8); }
+  100% { opacity: 0; transform: scale(1.5); box-shadow: 0 0 30px 10px rgb(255 59 92 / 0.4); }
+}
+.anim-dissolve { animation: digitalDissolve 1s ease-in both; will-change: transform, opacity; }
+.dust-p { opacity: 0; animation: digitalDust 800ms ease-out both; will-change: transform, opacity; }
+.anim-dissolve-glow { opacity: 0; animation: dissolveGlow 1s ease-out both; will-change: transform, opacity; }

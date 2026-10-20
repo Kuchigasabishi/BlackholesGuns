@@ -1,6 +1,7 @@
 import { ATTACKS } from '../../../src/engine';
 import { actionEmoji } from '../format/emoji';
 import { Avatar } from '../components/Avatar';
+import { LockShader } from '../components/LockShader';
 import { ControlPanel } from '../components/ControlPanel';
 import { SeriesStandings } from '../components/SeriesStandings';
 import { FXLayer } from '../components/FXLayer';
@@ -111,6 +112,8 @@ export function Roster() {
             const p = game.players[id]!;
             const alive = p.alive;
             const badge = badgeOf(state, id);
+            // Locked and loaded: this player has committed and the COMMIT window is still open.
+            const locked = state.stage === 'COMMIT' && alive && state.lockedPlayerIds.includes(id);
             const line = actionLine(state, id, nameOf);
             const justDied = state.revealed !== null && eliminatedNow.has(id);
             const isOwn = id === session.playerId;
@@ -143,6 +146,7 @@ export function Roster() {
                     {emoji}
                   </span>
                 )}
+                <LockShader active={locked} playerId={id} />
                 <div className={justDied && animate ? 'anim-ko' : ''}>
                   <Avatar seat={seat} playerId={id} eliminated={!alive} />
                 </div>
@@ -153,9 +157,9 @@ export function Roster() {
                 <p className={`bracket text-sm ${isOwn ? 'text-gold' : 'text-ink-dim'}`} title={isOwn ? undefined : "Opponents' Charge is hidden"}>
                   ⚡ {chargeDisplay} · 🏆 {wins}/{game.series.seriesWinTarget}
                 </p>
-                <p className={`bracket mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`}>
-                  <span aria-hidden="true">{BADGE_ICON[badge]} </span>
-                  {BADGE_TEXT[badge]}
+                <p className={`bracket relative z-20 mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`} data-locked={locked || undefined}>
+                  <span aria-hidden="true">{locked ? '🔒' : BADGE_ICON[badge]} </span>
+                  {locked ? 'LOCKED' : BADGE_TEXT[badge]}
                 </p>
                 {p.connectionStatus === 'DISCONNECTED' && alive && <p className="bracket mt-1 text-xs text-danger">[OFFLINE]</p>}
               </li>

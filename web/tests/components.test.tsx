@@ -429,13 +429,45 @@ describe('Keyboard: roving arrows, focus stability and optional shortcuts', () =
 // -------------------------------------------------------- roster, banner, status
 
 describe('Roster: status badges and colour-independent elimination', () => {
-  it('shows READY / HIDDEN ? by lock status', () => {
+  it('shows LOCKED (no HIDDEN ?) with the holographic shader once a player locks in; others stay HIDDEN ?', () => {
     const game = newGame(3);
     const s = reducer(clientStateFor(game, 'p1'), { type: 'progress', turnId: game.turn!.turnId, lockedPlayerIds: ['p2'] });
     mount(<Roster />, stubStore(s));
     expect(screen.getByTestId('badge-p1').textContent).toContain('HIDDEN ?');
-    expect(screen.getByTestId('badge-p2').textContent).toContain('READY');
+    expect(screen.getByTestId('badge-p2').textContent).toContain('LOCKED');
+    expect(screen.getByTestId('badge-p2').textContent).not.toContain('HIDDEN');
     expect(screen.getByTestId('badge-p3').textContent).toContain('HIDDEN ?');
+    expect(screen.getByTestId('lock-shader-p2').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByTestId('lock-shader-p2').className).toContain('pointer-events-none');
+    expect(screen.queryByTestId('lock-shader-p1')).toBeNull();
+    expect(screen.queryByTestId('lock-shader-p3')).toBeNull();
+  });
+
+  it('the shader fades out and is removed when the COMMIT window ends (reveal), leaving the card face clear', () => {
+    vi.useFakeTimers();
+    try {
+      const game = newGame(3);
+      const store = stubStore(reducer(clientStateFor(game, 'p1'), { type: 'progress', turnId: game.turn!.turnId, lockedPlayerIds: ['p2'] }));
+      mount(<Roster />, store);
+      expect(screen.getByTestId('lock-shader-p2')).toBeTruthy();
+      act(() => store.dispatch({ type: 'result', payload: resultFor(game, { p1: CHARGE, p2: CHARGE, p3: CHARGE }) }));
+      expect(screen.getByTestId('lock-shader-p2').getAttribute('data-leaving')).toBe('true'); // fading out
+      act(() => void vi.advanceTimersByTime(300));
+      expect(screen.queryByTestId('lock-shader-p2')).toBeNull();
+      expect(screen.getByTestId('badge-p2').textContent).not.toContain('LOCKED');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the shader animates transform only (GPU-friendly) and is defined in CSS', () => {
+    const css = readFileSync('web/src/index.css', 'utf8');
+    for (const k of ['lock-spin', 'lock-sheen']) {
+      const body = new RegExp(String.raw`@keyframes ${k} \{([\s\S]*?)\n\}`).exec(css)![1]!;
+      expect(body).toContain('transform');
+      expect(body).not.toMatch(/background|box-shadow|filter/);
+    }
+    expect(css).toContain('repeating-conic-gradient');
   });
 
   it('eliminated players get an explicit [ELIMINATED] text label, a greyscale avatar and a cross mark', () => {

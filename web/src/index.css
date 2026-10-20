@@ -259,3 +259,34 @@ body {
 .anim-shake-t3 { animation: shake-t3 300ms linear both; }
 .anim-shake-t4 { animation: shake-t4 300ms linear both; }
 .anim-shake-t5 { animation: shake-t5 300ms linear both; }
+
+/* "Locked and loaded" card shader (COMMIT phase). Everything that moves uses transform or opacity only,
+   so it composites on the GPU. Reduced motion freezes it via the global rules above. */
+@keyframes lock-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes lock-sheen {
+  from { transform: translateX(-66.6%); }
+  to { transform: translateX(0); }
+}
+@keyframes lock-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lock-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.lock-chain {
+  background: repeating-conic-gradient(from 0deg, #ffd54d 0deg 5deg, #3a4568 5deg 8deg, transparent 8deg 13deg);
+  animation: lock-spin 6s linear infinite;
+  will-change: transform;
+}
+.lock-sheen {
+  background: linear-gradient(115deg, #0b1020 0%, #1b2442 14%, #5d6fa6 22%, #8b5cf6 27%, #38e1ff 31%, #1b2442 40%, #0b1020 55%, #1b2442 69%, #5d6fa6 77%, #ff7ad9 81%, #38e1ff 85%, #1b2442 93%, #0b1020 100%);
+  opacity: 0.85;
+  animation: lock-sheen 3.2s linear infinite;
+  will-change: transform;
+}
+.lock-shader-in { animation: lock-fade-in 200ms ease-out both; }
+.lock-shader-out { animation: lock-fade-out 250ms ease-in both; }

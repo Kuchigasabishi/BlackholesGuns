@@ -1,6 +1,14 @@
 import { ATTACKS } from '../../../src/engine';
 import { actionEmoji } from '../format/emoji';
 import { useState } from 'react';
+import eyeOff from '../assets/ui/eye-off.svg';
+import house from '../assets/ui/house.svg';
+import logOut from '../assets/ui/log-out.svg';
+import noticeInfo from '../assets/ui/notice-info.svg';
+import timerIcon from '../assets/ui/timer.svg';
+import volumeIcon from '../assets/ui/volume-2.svg';
+import xIcon from '../assets/ui/x.svg';
+import { ArenaScene, SystemFooter } from '../components/ArenaScene';
 import { Avatar } from '../components/Avatar';
 import { Crumble, useCrumble } from '../components/Crumble';
 import { LockShader } from '../components/LockShader';
@@ -27,14 +35,16 @@ const PHASE_HELP: Record<string, string> = {
   OVERTIME: 'OVERTIME — normal combat rules (defenses are back). Neutralized attacks simply start another turn; there is no draw.',
 };
 
-// ---------------------------------------------------------------- top status bar
+// ---------------------------------------------------------------- match heading + telemetry
 
-function VolumeControl() {
+const controlBtn = 'flex h-11 items-center justify-center gap-[10px] rounded-[4px] border border-[#243747] bg-[#0c1420] px-4 font-inter text-[13px] font-semibold text-[#91a5b6] hover:text-[#eef6fa]';
+
+export function VolumeControl() {
   const { muted, volume, setMuted, setVolume } = useAudio();
   return (
-    <span className="flex items-center gap-2" data-testid="volume-control">
-      <button type="button" aria-pressed={muted} aria-label={muted ? 'Unmute audio' : 'Mute audio'} data-testid="mute-toggle" onClick={() => setMuted(!muted)} className="text-lg leading-none">
-        <span aria-hidden="true">{muted || volume === 0 ? '🔇' : '🔊'}</span>
+    <span className="flex h-11 w-[130px] items-center gap-[10px] rounded-[4px] border border-[#243747] p-3" data-testid="volume-control">
+      <button type="button" aria-pressed={muted} aria-label={muted ? 'Unmute audio' : 'Mute audio'} data-testid="mute-toggle" onClick={() => setMuted(!muted)} className={`shrink-0 ${muted || volume === 0 ? 'opacity-50' : ''}`}>
+        <img src={volumeIcon} alt="" aria-hidden="true" className="size-[18px]" />
       </button>
       <input
         type="range"
@@ -46,7 +56,7 @@ function VolumeControl() {
         data-testid="volume-slider"
         disabled={muted}
         onChange={(e) => setVolume(Number(e.target.value) / 100)}
-        className="h-1 w-20 accent-[#3ee6ff] disabled:opacity-40"
+        className="h-1 w-full min-w-0 accent-[#50e3ed] disabled:opacity-40"
       />
     </span>
   );
@@ -61,16 +71,18 @@ export function MatchMenu() {
   const isHost = lobby?.hostId === session.playerId;
   const btn = 'bracket rounded border px-3 py-1 text-xs font-bold';
   return (
-    <div className="flex flex-wrap items-center gap-2" data-testid="match-menu">
+    <div className="flex flex-wrap items-center gap-3" data-testid="match-menu">
       {ask === null ? (
         <>
           {isHost && (
-            <button type="button" data-testid="return-lobby" onClick={() => setAsk('lobby')} className={`${btn} border-gold text-gold hover:bg-gold/10`}>
-              🏠 Return to Lobby
+            <button type="button" data-testid="return-lobby" onClick={() => setAsk('lobby')} className={controlBtn}>
+              <img src={house} alt="" aria-hidden="true" className="size-[18px]" />
+              Return to Lobby
             </button>
           )}
-          <button type="button" data-testid="quit-match" onClick={() => setAsk('quit')} className={`${btn} border-danger text-danger hover:bg-danger/10`}>
-            🚪 Quit / Leave Match
+          <button type="button" data-testid="quit-match" onClick={() => setAsk('quit')} className={controlBtn}>
+            <img src={logOut} alt="" aria-hidden="true" className="size-[18px]" />
+            Quit / Leave Match
           </button>
         </>
       ) : (
@@ -104,15 +116,20 @@ export function NoticeBar() {
   const { notice } = useGameState();
   if (!notice) return null;
   return (
-    <p role="status" data-testid="notice-bar" className="flex items-center justify-between gap-3 rounded-lg border border-gold bg-gold/10 px-3 py-2 text-sm text-gold">
-      {notice}
-      <button type="button" onClick={() => store.dispatch({ type: 'notice', message: null })} className="rounded border border-gold px-2 py-0.5 text-xs hover:bg-gold/20">
+    <p role="status" data-testid="notice-bar" className="flex min-h-11 items-center justify-between gap-3 rounded-[4px] border border-[#514630] bg-[#221f19] px-4 py-2 font-inter text-[12px] text-[#dbc28b]">
+      <span className="flex items-center gap-[10px]">
+        <img src={noticeInfo} alt="" aria-hidden="true" className="size-4 shrink-0" />
+        {notice}
+      </span>
+      <button type="button" onClick={() => store.dispatch({ type: 'notice', message: null })} className="flex items-center gap-2 font-plex text-[10px] hover:text-[#f3dfae]">
         Dismiss
+        <img src={xIcon} alt="" aria-hidden="true" className="size-[14px]" />
       </button>
     </p>
   );
 }
 
+/** The "Match telemetry" panel: COMMIT TIMER, ALIVE, the Sudden Death rule note and the SERIES TARGET. */
 export function TopBar() {
   const state = useGameState();
   const { game, turn, session, stage } = state;
@@ -127,29 +144,45 @@ export function TopBar() {
   const alive = game.round.survivorIds.length;
   const toSuddenDeath = alive === 2 && phase === 'NORMAL' ? Math.max(0, 10 - streak) : null;
 
-  const chip = 'bracket whitespace-nowrap rounded border border-edge bg-void/60 px-3 py-1';
   return (
-    <header className="neon-box rounded-2xl p-3" aria-label="Game status">
-      <ul className="flex flex-wrap items-center gap-2 text-sm">
-        <li className={`${chip} text-neon-pink`} data-testid="timer" aria-label={`Commit timer ${seconds ?? 'not running'} seconds`}>
-          [ COMMIT TIMER: {stage === 'COMMIT' ? formatClock(seconds) : '--:--'} ]
-        </li>
-        <li className={chip}>[ ALIVE: {alive} ]</li>
-        <li className={chip}>
-          <VolumeControl />
-        </li>
-        <li className="ml-auto">
-          <MatchMenu />
-        </li>
-        <li className={chip} data-testid="series-target-chip">[ FIRST TO: {game.series.seriesWinTarget} WINS ]</li>
-      </ul>
-      {toSuddenDeath !== null && (
-        <p className="mt-2 text-sm text-ink-dim" data-testid="sd-countdown">
-          Two players left. Sudden Death begins after {toSuddenDeath} more turn{toSuddenDeath === 1 ? '' : 's'} without an elimination.
-        </p>
-      )}
+    <header aria-label="Game status" className="flex flex-col gap-3">
+      <div className="relative flex flex-wrap items-center justify-between gap-x-6 gap-y-4 rounded-lg border border-[#243747] bg-[#0c1420] px-6 py-5">
+        <span className="absolute -left-px -top-px h-[2px] w-[88px] bg-[#d37bc6]" aria-hidden="true" />
+        <div className="flex items-center gap-[18px]" data-testid="timer" aria-label={`Commit timer ${seconds ?? 'not running'} seconds`}>
+          <img src={timerIcon} alt="" aria-hidden="true" className="size-[26px]" />
+          <div className="flex flex-col gap-1">
+            <p className="font-plex text-[10px] text-[#d37bc6]">COMMIT TIMER</p>
+            <p className="font-grotesk text-[32px] font-bold leading-none text-[#eef6fa]">{stage === 'COMMIT' ? formatClock(seconds) : '--:--'}</p>
+          </div>
+        </div>
+        <span className="hidden h-[42px] w-px bg-[#243747] sm:block" aria-hidden="true" />
+        <div className="flex flex-col gap-[7px]" data-testid="alive">
+          <p className="font-plex text-[10px] text-[#91a5b6]">ALIVE</p>
+          <p className="font-grotesk font-bold leading-none text-[#eef6fa]">
+            <span className="text-[26px]">{String(alive).padStart(2, '0')} </span>
+            <span className="text-[13px] text-[#91a5b6]">{alive === 1 ? 'player' : 'players'}</span>
+          </p>
+        </div>
+        {toSuddenDeath !== null && (
+          <>
+            <span className="hidden h-[42px] w-px bg-[#243747] lg:block" aria-hidden="true" />
+            <div className="flex min-w-0 max-w-sm flex-col gap-[9px] text-[#91a5b6]" data-testid="sd-countdown">
+              <p className="font-plex text-[10px]">TWO PLAYERS LEFT</p>
+              <p className="font-inter text-[12px]">
+                Sudden Death begins after {toSuddenDeath} more turn{toSuddenDeath === 1 ? '' : 's'} without an elimination.
+              </p>
+            </div>
+          </>
+        )}
+        <div className="ml-auto flex flex-col items-end gap-[7px]" data-testid="series-target-chip">
+          <p className="font-plex text-[10px] text-[#91a5b6]">SERIES TARGET</p>
+          <p className="font-grotesk text-[20px] font-bold leading-none text-[#eef6fa]">
+            First to <span className="text-[#50e3ed]">{game.series.seriesWinTarget} wins</span>
+          </p>
+        </div>
+      </div>
       {phase !== 'NORMAL' && (
-        <p className="mt-2 rounded border border-gold bg-gold/10 px-3 py-2 text-gold" data-testid="phase-help">
+        <p className="rounded-[4px] border border-gold bg-gold/10 px-3 py-2 text-gold" data-testid="phase-help">
           {PHASE_HELP[phase]}
         </p>
       )}
@@ -199,7 +232,7 @@ export function Roster() {
         Players
       </h2>
       <div className="relative" data-testid="arena">
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="roster">
+        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="roster">
           {game.series.lobby.map((id, seat) => (
             <RosterCard key={id} id={id} seat={seat} state={state} />
           ))}
@@ -256,10 +289,10 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
       onClick={targetable ? () => store.dispatch({ type: 'toggleTarget', playerId: id }) : undefined}
       data-crumble={phase === 'crumbling' || undefined}
       aria-label={`${nameOf(id)}${isOwn ? ' (you)' : ''}, ${alive ? 'alive' : 'eliminated'}, ${isOwn ? `${chargeDisplay} charge` : 'charge hidden'}, ${wins} match wins`}
-      className={`neon-box relative isolate flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''} ${targetable && !targeted ? 'target-pulse cursor-pointer' : ''} ${targeted ? 'target-lock' : ''}`}
+      className={`relative isolate flex min-w-0 flex-col gap-4 rounded-[4px] border bg-[#070d16] p-[18px] ${isOwn ? 'border-[#153744]' : 'border-[#243747]'} ${alive ? '' : 'opacity-80'} ${targetable && !targeted ? 'target-pulse cursor-pointer' : ''} ${targeted ? 'target-lock' : ''}`}
     >
       {targetable && (
-        <button type="button" data-testid={`target-${id}`} aria-pressed={targeted} aria-label={`Target ${nameOf(id)}`} className="absolute inset-0 z-30 cursor-pointer rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-neon" />
+        <button type="button" data-testid={`target-${id}`} aria-pressed={targeted} aria-label={`Target ${nameOf(id)}`} className="absolute inset-0 z-30 cursor-pointer rounded-[4px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-neon" />
       )}
       {canKick && (
         <span className="absolute bottom-1 right-1 z-40 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -295,18 +328,30 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
         </span>
       )}
       <LockShader active={locked} playerId={id} />
-      <Crumble crumbling={phase === 'crumbling'}>
-        <Avatar seat={seat} playerId={id} eliminated={!alive} />
-      </Crumble>
-      <p className="mt-2 w-full truncate font-bold">
-        {nameOf(id)}
-        {isOwn && <span className="bracket ml-1 text-xs text-gold">[YOU]</span>}
+      <div className="flex items-center gap-3">
+        <Crumble crumbling={phase === 'crumbling'}>
+          <Avatar seat={seat} playerId={id} eliminated={!alive} size="sm" />
+        </Crumble>
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="truncate font-grotesk text-[20px] font-bold leading-none text-[#eef6fa]">{nameOf(id)}</p>
+          <p className={`font-plex text-[9px] ${isOwn ? 'text-[#50e3ed]' : 'text-[#d37bc6]'}`}>{isOwn ? '[YOU]' : 'OPPONENT'}</p>
+        </div>
+      </div>
+      <p className="flex items-start justify-between font-plex text-[10px] text-[#91a5b6]" title={isOwn ? undefined : "Opponents' Charge is hidden"}>
+        <span className={isOwn ? 'text-[#ffd54d]' : ''}>⚡ {chargeDisplay}</span>
+        <span className="sr-only"> · </span>
+        <span>
+          🏆 {wins}/{game!.series.seriesWinTarget}
+        </span>
       </p>
-      <p className={`bracket text-sm ${isOwn ? 'text-gold' : 'text-ink-dim'}`} title={isOwn ? undefined : "Opponents' Charge is hidden"}>
-        ⚡ {chargeDisplay} · 🏆 {wins}/{game!.series.seriesWinTarget}
-      </p>
-      <p className={`bracket relative z-20 mt-1 rounded border px-2 py-0.5 text-xs font-bold ${BADGE_STYLE[badge]}`} data-testid={`badge-${id}`} data-locked={locked || undefined}>
-        <span aria-hidden="true">{locked ? '🔒' : BADGE_ICON[badge]} </span>
+      <p className={`bracket relative z-20 flex h-8 items-center justify-center gap-[6px] rounded-[4px] border text-[9px] font-bold ${locked ? 'border-[#50e3ed]/60 bg-[#0c1420] text-[#50e3ed]' : badge === 'HIDDEN' ? 'border-[#243747] bg-[#0c1420] text-[#91a5b6]' : BADGE_STYLE[badge]}`} data-testid={`badge-${id}`} data-locked={locked || undefined}>
+        {locked ? (
+          <span aria-hidden="true">🔒</span>
+        ) : badge === 'HIDDEN' ? (
+          <img src={eyeOff} alt="" aria-hidden="true" className="size-3" />
+        ) : (
+          <span aria-hidden="true">{BADGE_ICON[badge]}</span>
+        )}
         {locked ? 'LOCKED' : BADGE_TEXT[badge]}
       </p>
       {p.connectionStatus === 'DISCONNECTED' && alive && <p className="bracket mt-1 text-xs text-danger">[OFFLINE]</p>}
@@ -324,20 +369,40 @@ function revealedEmoji(state: ClientState, playerId: string): string | null {
 export function GameScreen() {
   const { seriesEnd } = useGameState();
   return (
-    <main id="main" className="mx-auto flex max-w-7xl flex-col gap-4 px-3 py-4">
-      <FXLayer />
-      <SeriesResultModal />
-      <MatchResultsModal />
-      <TopBar />
-      <NoticeBar />
-      <PhaseNotice />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-        <div className="space-y-4">
-          <Roster />
-          {seriesEnd ? null : <div id="action-panel" tabIndex={-1}><ControlPanel /></div>}
+    <>
+      <main id="main" className="mx-auto flex max-w-[1440px] flex-col gap-6 px-4 pb-8 pt-7 sm:px-8 lg:px-14">
+        <FXLayer />
+        <SeriesResultModal />
+        <MatchResultsModal />
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-col gap-2">
+            <p className="font-plex text-[11px] text-[#50e3ed]">BLACKHOLES &amp; GUNS / LIVE MATCH</p>
+            <h1 className="font-grotesk text-[clamp(28px,5vw,36px)] font-bold leading-none text-[#eef6fa]">Make your move.</h1>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <VolumeControl />
+            <MatchMenu />
+          </div>
         </div>
-        <SeriesStandings />
-      </div>
-    </main>
+        <TopBar />
+        <NoticeBar />
+        <PhaseNotice />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,880px)_minmax(0,1fr)]">
+          <div className="min-w-0 lg:col-start-2 lg:row-start-1">
+            <Roster />
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-span-3 lg:row-start-1" id="action-panel" tabIndex={-1}>
+            {seriesEnd ? null : <ControlPanel />}
+          </div>
+          <div className="min-w-0 lg:col-start-2 lg:row-start-2">
+            <SeriesStandings />
+          </div>
+          <div className="min-w-0 lg:col-start-2 lg:row-start-3">
+            <ArenaScene scene="compact" />
+          </div>
+        </div>
+      </main>
+      <SystemFooter detail="ACTION COMMIT / ENCRYPTED" />
+    </>
   );
 }

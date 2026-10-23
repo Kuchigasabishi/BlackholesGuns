@@ -189,7 +189,11 @@ describe('Control panel: names, costs and affordability (Figure 1)', () => {
     mount(<ControlPanel />, inGame(2, 5).store);
     expect(document.querySelectorAll('button[data-kind="attack"]')).toHaveLength(12);
     for (const id of ATTACK_IDS) expect(button(id).textContent).toContain(`${ATTACKS[id].name}`);
-    for (const label of ['TIER 1 (1⚡):', 'TIER 2 (2⚡):', 'TIER 3 (3⚡):', 'TIER 4 (4⚡):', 'TIER 5 (5⚡):']) expect(screen.getByText(label)).toBeTruthy();
+    for (const n of [1, 2, 3, 4, 5]) {
+      const row = screen.getByRole('group', { name: new RegExp(`^TIER ${n},`) });
+      expect(within(row).getByText(`TIER ${n}`)).toBeTruthy();
+      expect(within(row).getAllByText(`${n} CHARGE`, { exact: false }).length).toBeGreaterThan(0);
+    }
   });
 
   it.each([0, 1, 2, 3, 4, 5])('at %i Charge exactly the attacks costing <= Charge are enabled, the rest are dimmed', (charge) => {
@@ -197,10 +201,11 @@ describe('Control panel: names, costs and affordability (Figure 1)', () => {
     for (const id of ATTACK_IDS) {
       const affordable = ATTACKS[id].cost <= charge;
       expect(disabled(id), `${id} disabled`).toBe(!affordable);
-      expect(button(id).className.includes('opacity-40'), `${id} dimmed`).toBe(!affordable);
+      expect(button(id).className.includes('cursor-not-allowed'), `${id} dimmed`).toBe(!affordable);
+      expect(button(id).querySelector('[data-lock-icon]') !== null, `${id} lock icon`).toBe(!affordable);
     }
     for (const id of DEFENSE_IDS) expect(disabled(id), id).toBe(DEFENSES[id].cost > charge);
-    expect(screen.getByTestId('my-charge').textContent).toBe(`YOUR CHARGE: ${charge}⚡`);
+    expect(screen.getByTestId('my-charge').textContent).toBe(`YOUR CHARGE${charge} ⚡`);
   });
 
   it('keeps disabled buttons focusable and explains why, on focus and on hover', () => {
@@ -608,9 +613,9 @@ describe('Roster: status badges and colour-independent elimination', () => {
 describe('Top bar and phase banner', () => {
   it('shows only the commit timer, alive count and series target', () => {
     mount(<TopBar />, inGame(3, 0).store);
-    expect(screen.getByTestId('timer').textContent).toMatch(/\[ COMMIT TIMER: 00:2[45] \]/);
-    expect(screen.getByText('[ ALIVE: 3 ]')).toBeTruthy();
-    expect(screen.getByTestId('series-target-chip').textContent).toBe('[ FIRST TO: 10 WINS ]');
+    expect(screen.getByTestId('timer').textContent).toMatch(/COMMIT TIMER\s*00:2[45]/);
+    expect(screen.getByTestId('alive').textContent).toContain('03 players');
+    expect(screen.getByTestId('series-target-chip').textContent).toBe('SERIES TARGETFirst to 10 wins');
     for (const id of ['turn-index', 'phase-banner', 'streak', 'my-status']) expect(screen.queryByTestId(id)).toBeNull();
     expect(screen.queryByText(/ROOM:/)).toBeNull();
   });
@@ -664,10 +669,13 @@ describe('Whole game screen and settings', () => {
     withWins({ p1: 1, p2: 2, p3: 2 });
     mount(<GameScreen />, store);
     const text = () => screen.getByTestId('series-standings').textContent!;
-    expect(text()).toMatch(/👑 1st: Bo.*\(2 Wins\).*1st: Cy.*\(2 Wins\).*3rd: Ada.*\(1 Win\)/);
+    expect(text()).toMatch(/👑 1st: Bo.*2 Wins.*1st: Cy.*2 Wins.*3rd: Ada.*1 Win/);
     act(() => withWins({ p1: 3, p2: 2, p3: 2 }));
-    expect(text()).toMatch(/👑 1st: Ada.*\(3 Wins\).*2nd: Bo.*\(2 Wins\)/);
+    expect(text()).toMatch(/👑 1st: Ada.*3 Wins.*2nd: Bo.*2 Wins/);
     expect(text()).toContain('First to 10 Match Wins');
+    // one progress segment per win needed, filled as wins are earned
+    const filled = (id: string) => screen.getByTestId(`progress-${id}`).querySelectorAll('[data-filled]').length;
+    expect([filled('p1'), filled('p2'), screen.getByTestId('progress-p2').children.length]).toEqual([3, 2, 10]);
   });
 
   it('the Reduced motion switch persists and marks the document', async () => {

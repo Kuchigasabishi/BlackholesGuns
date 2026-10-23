@@ -41,7 +41,7 @@ function AppBody() {
   const inviteCode = typeof window === 'undefined' ? '' : codeFromLocation(window.location.pathname);
 
   return (
-    <div className={screen === 'home' ? 'min-h-screen bg-[#060a10]' : undefined} data-screen={screen}>
+    <div className="min-h-screen bg-[#060a10]" data-screen={screen}>
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gold focus:px-3 focus:py-2 focus:text-void">
         Skip to main content
       </a>

@@ -20,6 +20,22 @@ import { useGameState, useSettings, useStore } from '../hooks';
 import type { Choice } from '../net/store';
 import { attackTip, reflectTip, type MatrixTip } from '../format/matrixTip';
 import { audio } from '../audio/AudioManager';
+import axe from '../assets/ui/axe.svg';
+import battery from '../assets/ui/battery.svg';
+import bomb from '../assets/ui/bomb.svg';
+import crosshair from '../assets/ui/crosshair.svg';
+import flame from '../assets/ui/flame.svg';
+import hammer from '../assets/ui/hammer.svg';
+import lockIcon from '../assets/ui/lock.svg';
+import orbit from '../assets/ui/orbit.svg';
+import pointer from '../assets/ui/pointer.svg';
+import radiation from '../assets/ui/radiation.svg';
+import scanLine from '../assets/ui/scan-line.svg';
+import shield from '../assets/ui/shield.svg';
+import shieldCheck from '../assets/ui/shield-check.svg';
+import sword from '../assets/ui/sword.svg';
+import swords from '../assets/ui/swords.svg';
+import wind from '../assets/ui/wind.svg';
 import { nameLookup } from '../state/reducer';
 
 const ATTACK_ICON: Record<AttackId, string> = {
@@ -43,6 +59,29 @@ const DEFENSE_ICON: Record<DefenseId, string> = {
   DOUBLE_REFLECT: '🪞',
   TRIPLE_REFLECT: '🪞',
   QUAD_REFLECT: '🪞',
+};
+
+/** The design's line icons for each action (the emoji maps above stay for tooltips and the animation). */
+const ICON_SVG: Record<string, string> = {
+  DODGE: wind,
+  SHIELD: shield,
+  CHARGE: battery,
+  GUN: crosshair,
+  KNIFE: sword,
+  GATLING_GUN: scanLine,
+  FLAMETHROWER: flame,
+  AXE: axe,
+  THREE_HIT_COMBO: swords,
+  GRENADE: crosshair,
+  KATANA: sword,
+  BOMB: bomb,
+  NUKE: radiation,
+  MJOLNIR: hammer,
+  BLACKHOLE: orbit,
+  REFLECT: shieldCheck,
+  DOUBLE_REFLECT: shieldCheck,
+  TRIPLE_REFLECT: shieldCheck,
+  QUAD_REFLECT: shieldCheck,
 };
 
 const TIERS: readonly { readonly label: string; readonly cost: number; readonly ids: readonly AttackId[]; readonly reflect?: DefenseId }[] = [
@@ -132,8 +171,9 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
   const [tipOpen, setTipOpen] = useState(false);
   // Affordable weapons / Reflects (cost 1-5) get a pulsing neon glow that escalates with the tier.
   const power = enabled && cost >= 1 && cost <= 5 ? cost : 0;
+  const free = cost === 0;
   return (
-    <span className="relative inline-flex" onMouseLeave={() => setTipOpen(false)}>
+    <span className="relative flex min-w-0" onMouseLeave={() => setTipOpen(false)}>
       <button
         type="button"
         data-action={id}
@@ -160,15 +200,26 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
         }}
         className={[
           power ? `power-up power-t${power}` : '',
-          'bracket flex min-w-[7.5rem] items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold uppercase transition',
-          enabled ? 'border-danger bg-danger/10 text-ink hover:bg-danger/25' : 'cursor-not-allowed border-dashed border-edge text-ink-dim opacity-40 grayscale',
-          selected ? 'bg-gold/20 ring-2 ring-gold' : '',
+          'flex h-[54px] w-full min-w-0 items-center gap-[9px] rounded-[4px] border px-3 text-left transition',
+          free
+            ? enabled
+              ? 'border-[#153744] bg-[#132e37] hover:brightness-125'
+              : 'cursor-not-allowed border-[#243747] bg-[#070d16] opacity-60'
+            : enabled
+              ? 'border-[#243747] bg-[#070d16] hover:bg-[#0c1420]'
+              : 'cursor-not-allowed border-[#243747] bg-[#070d16]',
+          selected ? 'bg-gold/15 ring-2 ring-gold' : '',
         ].join(' ')}
       >
-        <span aria-hidden="true">{icon}</span>
-        <span>{label}</span>
-        <span className="text-gold">({cost}⚡)</span>
-        {selected && <span aria-hidden="true">✔</span>}
+        <img src={ICON_SVG[id] ?? crosshair} alt="" aria-hidden="true" className={`size-[18px] shrink-0 ${enabled ? '' : 'opacity-50'}`} />
+        <span className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className={`truncate font-inter text-[12px] font-semibold leading-tight ${enabled ? 'text-[#eef6fa]' : 'text-[#91a5b6]'}`}>{label}</span>
+          <span className={`font-plex text-[9px] leading-none ${enabled ? 'text-[#50e3ed]' : 'text-[#546b7d]'}`}>
+            {cost} CHARGE<span className="sr-only"> ({cost}⚡)</span>
+          </span>
+        </span>
+        {!enabled && !free && <img src={lockIcon} alt="" aria-hidden="true" data-lock-icon className="size-3 shrink-0" />}
+        {selected && <span aria-hidden="true" className="text-gold">✔</span>}
         {why && (
           <span id={`why-${id}`} className="sr-only">
             {why}
@@ -335,19 +386,27 @@ export function ControlPanel() {
     />
   );
 
+  const gridCls = 'grid grid-cols-[repeat(auto-fit,minmax(8.25rem,1fr))] gap-2';
   return (
-    <section aria-labelledby="panel-h" className="neon-box rounded-2xl p-4" data-testid="control-panel">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="panel-h" className="font-display text-neon">
-          [ INTERACTIVE CONTROL PANEL — YOUR ACTION SELECTION ]
-        </h2>
-        <p className="bracket text-gold" data-testid="my-charge">
-          YOUR CHARGE: {charge}⚡
-        </p>
+    <section aria-labelledby="panel-h" className="flex flex-col overflow-hidden rounded-lg border border-[#243747] bg-[#0c1420]" data-testid="control-panel">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-6">
+        <div className="flex flex-col gap-[6px]">
+          <p className="font-plex text-[10px] text-[#50e3ed]">INTERACTIVE CONTROL PANEL</p>
+          <h2 id="panel-h" className="font-grotesk text-[26px] font-bold leading-none text-[#eef6fa]">
+            Your action selection
+          </h2>
+        </div>
+        <div className="flex flex-col items-end gap-1" data-testid="my-charge">
+          <p className="font-plex text-[10px] text-[#91a5b6]">YOUR CHARGE</p>
+          <p className="font-grotesk font-bold leading-none text-[#50e3ed]">
+            <span className="text-[28px]">{charge} </span>
+            <span className="text-[15px]">⚡</span>
+          </p>
+        </div>
       </div>
 
-      <div ref={panelRef} onKeyDown={onGridKeyDown} className="mt-3 space-y-3" role="group" aria-label="Action grid. Use arrow keys to move between actions.">
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Defensive actions and Charge">
+      <div ref={panelRef} onKeyDown={onGridKeyDown} className="flex flex-col gap-[14px] px-6 pb-5" role="group" aria-label="Action grid. Use arrow keys to move between actions.">
+        <div className={gridCls} role="group" aria-label="Defensive actions and Charge">
           {DEFENSE_IDS.filter((id) => DEFENSES[id].cost === 0).map((id) =>
             btn(id, 'defense', 0, DEFENSES[id].name, DEFENSES[id].cost, DEFENSE_ICON[id], availability?.defenses[id], () => select({ kind: 'DEFENSE', defense: id })),
           )}
@@ -357,37 +416,50 @@ export function ControlPanel() {
           })}
         </div>
 
+        {charge < 5 && (
+          <p className="flex items-center gap-[7px] font-plex text-[10px] text-[#91a5b6]">
+            <img src={lockIcon} alt="" aria-hidden="true" className="size-3" />
+            CHARGE TO UNLOCK HIGHER TIERS
+          </p>
+        )}
+
         {TIERS.map((tier, i) => (
-          <div key={tier.label} className="flex flex-wrap items-center gap-2" role="group" aria-label={`${tier.label}, ${tier.cost} charge`}>
-            <span className="bracket w-24 text-xs text-ink-dim">
-              {tier.label} ({tier.cost}⚡):
-            </span>
-            {tier.ids.map((id) =>
-              btn(id, 'attack', i + 1, ATTACKS[id].name, ATTACKS[id].cost, ATTACK_ICON[id], availability?.attacks[id], () => select({ kind: 'ATTACK', weapon: id, targets: [] })),
-            )}
-            {tier.reflect &&
-              btn(tier.reflect, 'defense', i + 1, DEFENSES[tier.reflect].name, DEFENSES[tier.reflect].cost, DEFENSE_ICON[tier.reflect], availability?.defenses[tier.reflect], () => select({ kind: 'DEFENSE', defense: tier.reflect! }))}
+          <div key={tier.label} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3" role="group" aria-label={`${tier.label}, ${tier.cost} charge`}>
+            <div className="flex shrink-0 flex-row gap-2 font-plex sm:w-[76px] sm:flex-col sm:gap-[6px]">
+              <span className="text-[11px] text-[#91a5b6]">{tier.label}</span>
+              <span className="text-[10px] text-[#546b7d]">{tier.cost} CHARGE</span>
+            </div>
+            <div className={`${gridCls} min-w-0 flex-1`}>
+              {tier.ids.map((id) =>
+                btn(id, 'attack', i + 1, ATTACKS[id].name, ATTACKS[id].cost, ATTACK_ICON[id], availability?.attacks[id], () => select({ kind: 'ATTACK', weapon: id, targets: [] })),
+              )}
+              {tier.reflect &&
+                btn(tier.reflect, 'defense', i + 1, DEFENSES[tier.reflect].name, DEFENSES[tier.reflect].cost, DEFENSE_ICON[tier.reflect], availability?.defenses[tier.reflect], () => select({ kind: 'DEFENSE', defense: tier.reflect! }))}
+            </div>
           </div>
         ))}
       </div>
 
-      <p role="status" aria-live="polite" data-testid="why-line" className="mt-3 min-h-6 text-sm text-gold">
-        {hint}
-      </p>
-
-      {/* Locked / waiting status (the Lock In control itself lives in the confirmation drawer below). */}
-      {!open && (
-        <div className="mt-4">
-          {locked ? (
-            <p data-testid="locked-indicator" role="status" className="bracket rounded-lg border border-ok bg-ok/10 px-4 py-3 text-ok">
+      <div className="flex flex-col gap-2 border-t border-[#243747] bg-[#070d16] px-6 py-[18px]">
+        <p role="status" aria-live="polite" data-testid="why-line" className="min-h-4 font-inter text-[12px] text-gold">
+          {hint}
+        </p>
+        {/* Locked / waiting status (the Lock In control itself floats next to the decision). */}
+        {!open ? (
+          locked ? (
+            <p data-testid="locked-indicator" role="status" className="bracket rounded-[4px] border border-ok bg-ok/10 px-4 py-3 text-ok">
               🔒 LOCKED{ownCommit ? `: ${choiceLabel(payloadToChoice(ownCommit), nameOf)}` : ''} — waiting for {Math.max(0, (turn?.eligiblePlayerIds.length ?? 0) - lockedPlayerIds.length)} more…
             </p>
           ) : (
-            <p className="text-ink-dim">{stage === 'BETWEEN_TURNS' ? 'Reveal in progress — the next turn opens shortly.' : 'Waiting for the next turn…'}</p>
-          )}
-        </div>
-      )}
-      {open && !selection && <p className="mt-3 text-sm text-ink-dim">Tap an action to choose it; Lock In appears right next to it.</p>}
+            <p className="font-inter text-[12px] text-[#91a5b6]">{stage === 'BETWEEN_TURNS' ? 'Reveal in progress — the next turn opens shortly.' : 'Waiting for the next turn…'}</p>
+          )
+        ) : !selection ? (
+          <p className="flex items-center gap-[10px] font-inter text-[12px] text-[#91a5b6]">
+            <img src={pointer} alt="" aria-hidden="true" className="size-4" />
+            Tap an action to choose it; lock in happens right next to it.
+          </p>
+        ) : null}
+      </div>
 
       {/* Lock In lives right next to the decision: by the chosen target's card, or by the action button. */}
       {open && selection && (

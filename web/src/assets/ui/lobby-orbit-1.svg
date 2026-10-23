@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="376" height="110" viewBox="0 0 376 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+<mask id="stroke0_0_26" fill="white">
+<path d="M376 55C376 85.3757 291.83 110 188 110C84.1705 110 0 85.3757 0 55C0 24.6243 84.1705 0 188 0C291.83 0 376 24.6243 376 55Z"/>
+</mask>
+<path id="Orbital trajectory" opacity="0.35" d="M376 55C376 85.3757 291.83 110 188 110C84.1705 110 0 85.3757 0 55C0 24.6243 84.1705 0 188 0C291.83 0 376 24.6243 376 55Z" stroke-width="2" stroke="#D37BC6" mask="url(#stroke0_0_26)"/>
+</svg>

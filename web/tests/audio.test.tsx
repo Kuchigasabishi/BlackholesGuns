@@ -10,7 +10,7 @@ import { TurnResolutionModal } from '../src/components/TurnResolutionModal';
 import { FX_TIMING, buildSchedule, planTurn } from '../src/format/fxPlan';
 import { FxTimelineProvider } from '../src/fx/FxTimeline';
 import { SettingsProvider, StoreProvider } from '../src/hooks';
-import { TopBar } from '../src/screens/Game';
+import { TopBar, VolumeControl } from '../src/screens/Game';
 import { CHARGE, attack, clientStateFor, defend, newGame, resultFor, stubStore, withCharges } from './fixtures';
 import type { PlayRecord } from './setup';
 
@@ -175,7 +175,7 @@ describe('Mute and volume control in the status bar', () => {
   it('has a mute toggle and a volume slider that silence and scale all sound, and are remembered', async () => {
     vi.useRealTimers();
     const game = withCharges(newGame(2), { p1: 0 });
-    mount(<TopBar />, stubStore(clientStateFor(game, 'p1')));
+    mount(<VolumeControl />, stubStore(clientStateFor(game, 'p1')));
     const toggle = screen.getByTestId('mute-toggle');
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
     audio.play('boom');

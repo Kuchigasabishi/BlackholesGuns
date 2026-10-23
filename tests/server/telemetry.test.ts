@@ -100,7 +100,7 @@ describe('§16 telemetry: all 14 lifecycle events', () => {
     await players[0]!.result(turnId);
 
     const started = ofType(telemetry.entries, 'series_started')[0]!;
-    expect(started).toMatchObject({ seed: 'telemetry-seed', rulesVersion: '1.0.4', matrixVersion: 'v2', playerCount: 3, lobby: ['p1', 'p2', 'p3'] });
+    expect(started).toMatchObject({ seed: 'telemetry-seed', rulesVersion: '1.1.0', matrixVersion: 'v2', playerCount: 3, lobby: ['p1', 'p2', 'p3'] });
 
     const revealed = ofType(telemetry.entries, 'turn_revealed')[0]!;
     expect(revealed).toMatchObject({ phase: 'NORMAL', noEliminationStreak: 0, matchWins: { p1: 0, p2: 0, p3: 0 } });

@@ -51,11 +51,12 @@ type InteractionResult = Pick<
  * One attacker against one selected target, using the target's locked action:
  *  - Charging target: eliminated (§3, §17 audit finding).
  *  - Defending target: matrix lookup (§5).
- *  - Attacking target: attack-versus-attack collision (§6, §11 pseudocode).
- *    Per the §11 pseudocode this pairs the two *attacks* whenever the target
- *    chose an attack, whomever that attack is aimed at.
+ *  - Attacking target: attack-versus-attack collision (§6), but ONLY when the
+ *    target is attacking the attacker back (`aimedBack`: mutual targeting).
+ *    Rules v1.1: a target attacking somebody else has no defense against this
+ *    attacker, so it is eliminated just like a Charging target.
  */
-function resolveInteraction(attackerId: PlayerId, attack: AttackAction, targetId: PlayerId, target: Action): InteractionResult {
+function resolveInteraction(attackerId: PlayerId, attack: AttackAction, targetId: PlayerId, target: Action, aimedBack: boolean): InteractionResult {
   const targetAction = refOf(target);
 
   switch (target.kind) {
@@ -84,6 +85,16 @@ function resolveInteraction(attackerId: PlayerId, attack: AttackAction, targetId
     }
 
     case 'ATTACK': {
+      if (!aimedBack) {
+        return {
+          targetAction,
+          ruleType: 'UNGUARDED',
+          ruleId: 'UNGUARDED_ATTACKER',
+          matrixResult: null,
+          outcome: 'TARGET_ELIMINATED',
+          eliminationMarks: [targetId],
+        };
+      }
       const collision = resolveAttackPair(attack.weapon, target.weapon);
       const base = { targetAction, ruleType: 'COLLISION', ruleId: `COLLISION:${collision.ruleId}`, matrixResult: null } as const;
       if (collision.loser === 'A') return { ...base, outcome: 'ATTACKER_ELIMINATED', eliminationMarks: [attackerId] };
@@ -122,6 +133,7 @@ function assertResolvable(state: GameState, living: readonly PlayerId[], locked:
  * @param lockedActions  One accepted, legal action per living player (see `lockTurn`).
  *
  * Lifecycle after resolution (§2, §10 COMPLETE, §15):
+ *  - collisions: only between players attacking each other; an attacker hit by a third party it is not attacking is eliminated;
  *  - no elimination: the next turn opens, streak + 1, phase re-evaluated;
  *  - elimination, 2+ survivors: new round, survivors at 0 Charge;
  *  - elimination, 1 survivor: that player earns a Match Win; at
@@ -143,12 +155,19 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
   // ---- RESOLVE: every interaction against the one snapshot -----------------
   const events: ResolutionEvent[] = [];
   const marks = new Set<PlayerId>();
+  // Who each attacker's weapon is aimed at (the §7 effect target set), for mutual-targeting checks.
+  const aimsAt = new Map<PlayerId, readonly PlayerId[]>();
+  for (const id of living) {
+    const a = actionOf(id);
+    if (a.kind === 'ATTACK') aimsAt.set(id, resolveEffectTargets(ATTACKS[a.weapon], id, a.targets, living));
+  }
   for (const attackerId of living) {
     const attack = actionOf(attackerId);
     if (attack.kind !== 'ATTACK') continue;
     const effectTargets = resolveEffectTargets(ATTACKS[attack.weapon], attackerId, attack.targets, living);
     for (const targetId of effectTargets) {
-      const result = resolveInteraction(attackerId, attack, targetId, actionOf(targetId));
+      const aimedBack = aimsAt.get(targetId)?.includes(attackerId) ?? false;
+      const result = resolveInteraction(attackerId, attack, targetId, actionOf(targetId), aimedBack);
       events.push({
         orderKey: events.length,
         turnId: turn.turnId,

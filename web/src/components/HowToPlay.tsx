@@ -162,7 +162,10 @@ function Content() {
       </Section>
 
       <Section id="htp-collide" title="When two attacks collide">
-        <p className="text-sm text-ink-dim">If you attack a player who is also attacking, the attacks fight each other:</p>
+        <p className="text-sm text-ink-dim">
+          Attacks only fight each other when two players are attacking <strong>each other</strong>. If you attack someone who is attacking a third player, they have no defense against you and are eliminated, and the same goes for you if
+          someone you are not attacking hits you. When you are attacking each other:
+        </p>
         <ul className="list-disc space-y-1 pl-5">
           <li><strong>Higher tier wins</strong> — the lower-tier attacker is eliminated.</li>
           <li><strong>Same tier, ranged vs. melee</strong> — ranged wins; the melee attacker is eliminated.</li>

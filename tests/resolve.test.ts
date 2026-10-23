@@ -194,11 +194,19 @@ describe('simultaneous resolution against one snapshot (§6.4, §7)', () => {
     expect(backwards).toEqual(forwards);
   });
 
-  it('a collision with a target who is attacking someone else still pairs the two attacks (§11)', () => {
-    // p1 Knife -> p2; p2 Gun -> p3 (not at p1). Ranged beats melee, so p1 is eliminated.
+  it('rules v1.1: a target who is attacking someone ELSE has no defense and is eliminated (no collision)', () => {
+    // p1 Knife -> p2; p2 Gun -> p3 (not at p1). The weapons do not pair, so p1's Knife simply hits p2.
     const state = withCharges(newGame(3), { p1: 1, p2: 1 });
     const result = play(state, attack('p1', 'KNIFE', 'p2'), attack('p2', 'GUN', 'p3'), defend('p3', 'DODGE'));
-    expect(result.outcome.eliminatedPlayerIds).toEqual(['p1']);
+    expect(result.outcome.eliminatedPlayerIds).toEqual(['p2']);
+    expect(result.events[0]).toMatchObject({ ruleType: 'UNGUARDED', ruleId: 'UNGUARDED_ATTACKER', outcome: 'TARGET_ELIMINATED', eliminationMarks: ['p2'] });
+  });
+
+  it('a collision still happens when the two players attack EACH OTHER (higher tier wins)', () => {
+    const state = withCharges(newGame(3), { p1: 1, p2: 1 });
+    const result = play(state, attack('p1', 'KNIFE', 'p2'), attack('p2', 'GUN', 'p1'), charge('p3'));
+    expect(result.events.find((e) => e.sourcePlayerId === 'p1')).toMatchObject({ ruleType: 'COLLISION', outcome: 'ATTACKER_ELIMINATED' });
+    expect(result.outcome.eliminatedPlayerIds).toEqual(['p1']); // Gun beats Knife (ranged over melee); nobody aimed at the Charging p3
   });
 
   it('emits events in a deterministic order: attackers by seat, then targets in effect-set order', () => {

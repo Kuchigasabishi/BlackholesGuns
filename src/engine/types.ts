@@ -158,7 +158,7 @@ export type ActionRef =
 
 // ------------------------------------------------------- resolution output
 
-export type ResolutionRuleType = 'MATRIX' | 'COLLISION' | 'CHARGE_HIT';
+export type ResolutionRuleType = 'MATRIX' | 'COLLISION' | 'CHARGE_HIT' | 'UNGUARDED';
 
 export type ResolutionOutcome =
   /** The selected target is eliminated. (For collisions: the target's own attack lost.) */
@@ -184,7 +184,7 @@ export interface ResolutionEvent {
   readonly effectTargetSet: readonly PlayerId[];
   readonly targetAction: ActionRef;
   readonly ruleType: ResolutionRuleType;
-  /** e.g. `MATRIX_V2:GUN:REFLECT`, `COLLISION:HIGHER_TIER`, `CHARGE_HIT`. */
+  /** e.g. `MATRIX_V2:GUN:REFLECT`, `COLLISION:HIGHER_TIER`, `CHARGE_HIT`, `UNGUARDED_ATTACKER`. */
   readonly ruleId: string;
   /** The matrix cell label when `ruleType` is MATRIX. */
   readonly matrixResult: MatrixResult | null;

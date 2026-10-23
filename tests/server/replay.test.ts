@@ -42,7 +42,7 @@ describe('§16 deterministic replay', () => {
     const { players, roomCode, turnId } = await startedGame(run, 2);
     const log = await playVariedGame(run, players, roomCode, turnId);
 
-    expect(log).toMatchObject({ formatVersion: 1, seed: 'replay-seed', rulesVersion: '1.0.4', matrixVersion: 'v2' });
+    expect(log).toMatchObject({ formatVersion: 1, seed: 'replay-seed', rulesVersion: '1.1.0', matrixVersion: 'v2' });
     expect(log.initialState.round.turnIndex).toBe(1);
     expect(log.entries.map((e) => (e.type === 'OVERRIDE' ? `OVERRIDE:${e.reason}` : 'TURN'))).toEqual([
       'TURN',

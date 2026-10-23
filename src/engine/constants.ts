@@ -1,6 +1,7 @@
 /** Rule constants fixed by GDD v1.0.4. Nothing here is tunable at runtime. */
 
-export const RULES_VERSION = '1.0.4';
+/** 1.1.0: attack-vs-attack collisions only happen between players attacking EACH OTHER (see resolveTurn). */
+export const RULES_VERSION = '1.1.0';
 export const MATRIX_VERSION = 'v2';
 
 export const MIN_PLAYERS = 2;

@@ -202,6 +202,8 @@ export function describeResolution(result: TurnResultPayload, nameOf: NameOf): R
       } else {
         add('ELIMINATED', `${tgt}: ${src}'s ${weapon} got through ${defense}`);
       }
+    } else if (e.ruleType === 'UNGUARDED') {
+      add('ELIMINATED', `${tgt}: ${src}'s ${weapon} hit ${tgt}, who was attacking someone else and had no defense`);
     } else {
       const theirs = weaponName(ta.weapon);
       const why = collisionWhy(e.sourceWeapon, ta.weapon, e.ruleId);
@@ -348,6 +350,9 @@ export function describeBattlefield(result: TurnResultPayload, nameOf: NameOf): 
           res = 'ELIMINATED';
           note = `${src}'s ${weapon} got through ${defense}`;
         }
+      } else if (e.ruleType === 'UNGUARDED') {
+        res = 'ELIMINATED';
+        note = `${src}'s ${weapon} hit ${nameOf(a.playerId)}, who was attacking someone else (no defense)`;
       } else {
         const why = collisionWhy(e.sourceWeapon, ta.weapon, e.ruleId);
         res = e.outcome === 'NEUTRALIZED' ? 'NEUTRALIZED' : e.outcome === 'ATTACKER_ELIMINATED' ? 'CLASH_WON' : 'ELIMINATED';

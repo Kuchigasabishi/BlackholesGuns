@@ -265,3 +265,18 @@ describe('describeResolution: Turn Resolution modal content', () => {
     expect(d.outcomes).toEqual([]);
   });
 });
+
+describe('rules v1.1: an attacker hit by a third party', () => {
+  it('is described as having no defense, and the projectile is a HIT', async () => {
+    const { describeBattlefield, describeResolution } = await import('../src/format/describeTurn');
+    const { planTurn } = await import('../src/format/fxPlan');
+    const { NAMES, attack, defend, newGame, resultFor, withCharges } = await import('./fixtures');
+    const nameOf = (id: string) => NAMES[Number(id.slice(1)) - 1] ?? id;
+    const r = resultFor(withCharges(newGame(3), { p1: 2, p3: 1 }), { p1: attack('FLAMETHROWER', 'p2'), p2: defend('DODGE'), p3: attack('KNIFE', 'p1') });
+    expect(describeResolution(r, nameOf).outcomes.map((o) => o.text)).toContain("Ada: Cy's Knife hit Ada, who was attacking someone else and had no defense");
+    const ada = describeBattlefield(r, nameOf).find((c) => c.playerId === 'p1')!;
+    expect(ada.eliminated).toBe(true);
+    expect(ada.incoming[0]).toMatchObject({ result: 'ELIMINATED', note: "Cy's Knife hit Ada, who was attacking someone else (no defense)" });
+    expect(planTurn(r).projectiles.find((p) => p.from === 'p3')).toMatchObject({ to: 'p1', end: 'HIT' });
+  });
+});

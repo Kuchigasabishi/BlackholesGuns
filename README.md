@@ -37,7 +37,7 @@ Every turn is a **simultaneous, hidden-information** decision:
 | **12 attacks, 5 tiers** | Tier 1 Gun, Knife - Tier 2 Gatling Gun, Flamethrower, Axe - Tier 3 3-hit Combo, Grenade, Katana - Tier 4 Bomb, Nuke, Mjolnir - Tier 5 Blackhole. Cost equals tier. Each is ranged, melee or special, and hits 1, up to 3, or all opponents. |
 | **6 defenses** | Dodge and Shield (free); Reflect, Double, Triple and Quad Reflect (1-4 Charge). |
 | **12x6 interaction matrix** | Every attack/defense pair resolves to *block*, *eliminate* or *reflect* (the attacker is eliminated). |
-| **Attack vs. attack** | Higher tier wins; at equal tier, ranged beats melee; equal tier and class cancel out; Blackhole beats every attack except another Blackhole. |
+| **Attack vs. attack** | Only between two players attacking *each other* (rules v1.1): higher tier wins; at equal tier, ranged beats melee; equal tier and class cancel out; Blackhole beats every attack except another Blackhole. An attacker hit by someone it is *not* attacking has no defense and is eliminated. |
 | **Stalemate breakers** | After 10 turns with no elimination (two players left): **Sudden Death**, where defenses are disabled and attacking is mandatory when affordable. After 15: **Overtime**, where normal rules return. There is no draw state. |
 | **Structure** | Round, then match (+1 Match Win), then series (first to 10 Match Wins). |
 

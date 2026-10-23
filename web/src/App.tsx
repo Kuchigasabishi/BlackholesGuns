@@ -1,28 +1,13 @@
 import { useState } from 'react';
+import { SiteToolbar } from './components/SiteToolbar';
 import { TurnResolutionModal } from './components/TurnResolutionModal';
 import { GameScreen } from './screens/Game';
 import { codeFromLocation, HomeScreen } from './screens/Home';
 import { LobbyScreen } from './screens/Lobby';
 import { useAudioPreload, useBgm } from './audio/useAudio';
 import { FxTimelineProvider, useFx } from './fx/FxTimeline';
-import { useGameState, useSettings } from './hooks';
+import { useGameState } from './hooks';
 import { screenOf } from './state/reducer';
-
-function Toggle({ label, checked, onChange, hint }: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      title={hint}
-      onClick={() => onChange(!checked)}
-      className="bracket flex items-center gap-2 rounded border border-edge px-3 py-1 text-xs text-ink-dim hover:text-ink"
-    >
-      <span aria-hidden="true" className={`inline-block h-3 w-3 rounded-full border ${checked ? 'border-ok bg-ok' : 'border-ink-dim'}`} />
-      {label}: <strong className={checked ? 'text-ok' : ''}>{checked ? 'ON' : 'OFF'}</strong>
-    </button>
-  );
-}
 
 export function KeyboardHelp() {
   return (
@@ -48,7 +33,6 @@ export function KeyboardHelp() {
 function AppBody() {
   useAudioPreload();
   const state = useGameState();
-  const { reducedMotion, setReducedMotion, keyboardMode, setKeyboardMode } = useSettings();
   const [help, setHelp] = useState(false);
   const fx = useFx();
   // After the final blow of a series the server already reports the lobby; keep the arena up until its animation settles.
@@ -57,7 +41,7 @@ function AppBody() {
   const inviteCode = typeof window === 'undefined' ? '' : codeFromLocation(window.location.pathname);
 
   return (
-    <>
+    <div className={screen === 'home' ? 'min-h-screen bg-[#060a10]' : undefined} data-screen={screen}>
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gold focus:px-3 focus:py-2 focus:text-void">
         Skip to main content
       </a>
@@ -67,16 +51,7 @@ function AppBody() {
         </a>
       )}
 
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-end gap-2 px-3 pt-3" role="group" aria-label="Accessibility settings">
-        <span className="bracket mr-auto text-xs text-ink-dim" data-testid="connection">
-          SERVER: {state.connection === 'connected' ? '● ONLINE' : state.connection === 'connecting' ? '◌ CONNECTING' : '○ OFFLINE — reconnecting'}
-        </span>
-        <Toggle label="Reduced motion" checked={reducedMotion} onChange={setReducedMotion} />
-        <Toggle label="Keyboard shortcuts" checked={keyboardMode} onChange={setKeyboardMode} hint="Enable single-key shortcuts (C, 1-7, L)" />
-        <button type="button" aria-expanded={help} onClick={() => setHelp((h) => !h)} className="bracket rounded border border-edge px-3 py-1 text-xs text-ink-dim hover:text-ink">
-          {help ? 'Hide' : 'Show'} keyboard help
-        </button>
-      </div>
+      <SiteToolbar help={help} onToggleHelp={() => setHelp((h) => !h)} />
       {help && (
         <div className="mx-auto mt-2 max-w-7xl px-3">
           <KeyboardHelp />
@@ -87,7 +62,7 @@ function AppBody() {
       {screen === 'home' && <HomeScreen initialCode={inviteCode} />}
       {screen === 'lobby' && <LobbyScreen />}
       {screen === 'game' && <GameScreen />}
-    </>
+    </div>
   );
 }
 

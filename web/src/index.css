@@ -13,6 +13,9 @@
   --color-ink: #e6f0ff;
   --color-ink-dim: #9db3d9;
   --font-display: "Orbitron", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --font-grotesk: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-plex: "IBM Plex Mono", "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --font-inter: "Inter", system-ui, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", "Cascadia Mono", ui-monospace, Consolas, monospace;
 }
 

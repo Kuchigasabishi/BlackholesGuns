@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import bookOpen from '../assets/landing/book-open.svg';
 import { trapTab } from '../a11y';
 import {
   ATTACK_IDS,
@@ -190,7 +191,7 @@ function Content() {
 }
 
 /** "How to play" button + modal dialog (focus-trapped, Esc / backdrop / Close to dismiss, focus returns to the button). */
-export function HowToPlay() {
+export function HowToPlay({ landing = false }: { landing?: boolean }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
@@ -224,10 +225,17 @@ export function HowToPlay() {
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
-        className="mx-auto rounded-lg border-2 border-gold bg-gold/10 px-6 py-3 font-display font-bold text-gold hover:bg-gold/20"
+        className={landing ? 'flex items-start gap-[10px] rounded-[4px] border border-[#153744] bg-[#132e37] px-4 py-[13px] font-inter text-[13px] font-semibold text-[#50e3ed] hover:bg-[#17394a]' : 'mx-auto rounded-lg border-2 border-gold bg-gold/10 px-6 py-3 font-display font-bold text-gold hover:bg-gold/20'}
         data-testid="how-to-play-button"
       >
-        📖 How to play
+        {landing ? (
+          <>
+            <img src={bookOpen} alt="" aria-hidden="true" className="size-[17px] shrink-0" />
+            <span>How to play</span>
+          </>
+        ) : (
+          '📖 How to play'
+        )}
       </button>
 
       {open && (

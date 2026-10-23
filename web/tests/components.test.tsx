@@ -868,3 +868,36 @@ describe('On Fire streak aura on the Series Standings', () => {
     }
   });
 });
+
+describe('Card visuals: identity under the lock shader, target glow and reticle', () => {
+  it('a locked card keeps its avatar and name; the shader is a translucent layer behind them', () => {
+    const game = newGame(3);
+    const s = reducer(clientStateFor(game, 'p1'), { type: 'progress', turnId: game.turn!.turnId, lockedPlayerIds: ['p2'] });
+    mount(<Roster />, stubStore(s));
+    const card = screen.getByTestId('player-p2');
+    expect(card.textContent).toContain('Bo');
+    expect(card.textContent).toContain('🦊'); // Bo's avatar
+    expect(card.className).toContain('isolate');
+    const shader = screen.getByTestId('lock-shader-p2');
+    expect(shader.className).toContain('z-[-1]'); // behind the content, not over it
+    expect(shader.innerHTML).toContain('bg-[#070b18]/55'); // semi-translucent panel
+    expect(shader.textContent).toBe('');
+  });
+
+  it('opponents pulse with a neon glow while choosing a target; the chosen card becomes a steady ring with a reticle', async () => {
+    const { store } = inGame(3, 1);
+    mount(<Arena />, store);
+    await userEvent.click(button('GUN'));
+    expect(screen.getByTestId('player-p2').className).toContain('target-pulse');
+    expect(screen.getByTestId('player-p1').className).not.toContain('target-pulse');
+    await userEvent.click(screen.getByTestId('player-p2'));
+    const chosen = screen.getByTestId('player-p2');
+    expect(chosen.className).toContain('target-lock');
+    expect(chosen.className).not.toContain('target-pulse');
+    expect(screen.getByTestId('reticle-p2').textContent).toContain('🎯');
+    expect(screen.getByTestId('player-p3').className).toContain('target-pulse'); // the others keep inviting a click
+    const css = readFileSync('web/src/index.css', 'utf8');
+    const body = new RegExp(String.raw`@keyframes targetPulse \{([\s\S]*?)\n\}`).exec(css)![1]!;
+    expect(body).not.toMatch(/box-shadow|width|height|margin|border/); // opacity only
+  });
+});

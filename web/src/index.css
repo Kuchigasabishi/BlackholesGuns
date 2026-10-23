@@ -284,7 +284,7 @@ body {
 }
 .lock-sheen {
   background: linear-gradient(115deg, #0b1020 0%, #1b2442 14%, #5d6fa6 22%, #8b5cf6 27%, #38e1ff 31%, #1b2442 40%, #0b1020 55%, #1b2442 69%, #5d6fa6 77%, #ff7ad9 81%, #38e1ff 85%, #1b2442 93%, #0b1020 100%);
-  opacity: 0.85;
+  opacity: 0.6;
   animation: lock-sheen 3.2s linear infinite;
   will-change: transform;
 }
@@ -361,4 +361,31 @@ body {
   background: radial-gradient(ellipse 85% 100% at 30% 100%, #ffb300 0%, #ff4d00 45%, #c62800 65%, transparent 82%), radial-gradient(ellipse 60% 90% at 78% 100%, #ff7a00 0%, #ff2d00 50%, transparent 78%);
   animation: burningFlame 1.15s ease-in-out -0.4s infinite alternate;
   opacity: 0.8;
+}
+
+/* Target selection feedback on player cards. While you are choosing a target, every living opponent breathes with a
+   bright gold neon glow (opacity-only pulse on a pseudo-element: GPU-composited, no layout change, drawn outside the
+   card so click boundaries are untouched). The chosen card switches to a steady, intense red ring. */
+@keyframes targetPulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.target-pulse::after,
+.target-lock::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.target-pulse::after {
+  border: 2px solid rgb(250 204 21);
+  box-shadow: 0 0 20px 3px rgba(234, 179, 8, 0.75), inset 0 0 14px rgba(234, 179, 8, 0.45);
+  animation: targetPulse 1.1s ease-in-out infinite;
+  will-change: opacity;
+}
+.target-lock::after {
+  border: 3px solid rgb(255 59 92);
+  box-shadow: 0 0 24px 6px rgba(255, 59, 92, 0.85), inset 0 0 18px rgba(255, 59, 92, 0.6);
 }

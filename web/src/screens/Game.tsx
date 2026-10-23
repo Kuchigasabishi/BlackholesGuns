@@ -250,14 +250,14 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
       onClick={targetable ? () => store.dispatch({ type: 'toggleTarget', playerId: id }) : undefined}
       data-crumble={phase === 'crumbling' || undefined}
       aria-label={`${nameOf(id)}${isOwn ? ' (you)' : ''}, ${alive ? 'alive' : 'eliminated'}, ${isOwn ? `${chargeDisplay} charge` : 'charge hidden'}, ${wins} match wins`}
-      className={`neon-box relative flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''} ${targetable ? 'cursor-pointer outline-2 outline-dashed outline-gold/80 hover:bg-white/5' : ''} ${targeted ? 'ring-2 ring-danger' : ''}`}
+      className={`neon-box relative isolate flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''} ${targetable && !targeted ? 'target-pulse cursor-pointer' : ''} ${targeted ? 'target-lock' : ''}`}
     >
       {targetable && (
         <button type="button" data-testid={`target-${id}`} aria-pressed={targeted} aria-label={`Target ${nameOf(id)}`} className="absolute inset-0 z-30 cursor-pointer rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-neon" />
       )}
       {targeted && (
-        <span data-testid={`reticle-${id}`} className="bracket pointer-events-none absolute left-1 top-1 z-20 rounded border border-danger bg-void/90 px-1.5 py-0.5 text-[11px] font-bold text-danger">
-          <span aria-hidden="true">🎯 </span>TARGET
+        <span data-testid={`reticle-${id}`} className="bracket pointer-events-none absolute -left-1 -top-2 z-20 rounded border-2 border-danger bg-void px-2 py-0.5 text-xs font-black text-danger shadow-[0_0_12px_rgba(255,59,92,0.9)]">
+          <span aria-hidden="true" className="text-base">🎯 </span>TARGET
         </span>
       )}
       {line && (

@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 const FADE_MS = 250;
 
 /**
- * "Locked and loaded" overlay for a player's card during COMMIT: a dark metallic
+ * "Locked and loaded" backdrop for a player's card during COMMIT: a dark metallic
  * holographic panel with a sheen sweeping across it, framed by a rotating dashed
- * chain border. Purely presentational (pointer-events none, aria-hidden). Both
+ * chain border. It sits BEHIND the card's content (the card is its own stacking context), so the avatar and name stay
+ * fully visible on top. Purely presentational (pointer-events none, aria-hidden). Both
  * moving layers animate `transform` only, which browsers run on the GPU, so it stays
  * smooth on mid-range phones. When `active` turns false it fades out, then unmounts,
  * so the card face and the revealed action emoji are never clipped.
@@ -35,14 +36,13 @@ export function LockShader({ active, playerId }: { active: boolean; playerId: st
       aria-hidden="true"
       data-testid={`lock-shader-${playerId}`}
       data-leaving={leaving || undefined}
-      className={`lock-shader pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-xl ${leaving ? 'lock-shader-out' : 'lock-shader-in'}`}
+      className={`lock-shader pointer-events-none absolute inset-0 z-[-1] overflow-hidden rounded-xl ${leaving ? 'lock-shader-out' : 'lock-shader-in'}`}
     >
       {/* rotating chain: a dashed conic ring that spins behind the panel, leaving only the border visible */}
       <span className="lock-chain absolute -inset-[60%]" />
-      <span className="absolute inset-[3px] overflow-hidden rounded-[9px] bg-[#070b18]/90">
+      <span className="absolute inset-[3px] overflow-hidden rounded-[9px] bg-[#070b18]/55">
         {/* iridescent sheen sweeping across (translate only) */}
         <span className="lock-sheen absolute inset-y-0 left-0 w-[300%]" />
-        <span className="absolute inset-0 flex items-center justify-center text-3xl opacity-70">🔒</span>
       </span>
     </div>
   );

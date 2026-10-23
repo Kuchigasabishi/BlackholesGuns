@@ -230,8 +230,8 @@ describe('Control panel: choosing, targeting and locking in', () => {
     await userEvent.click(button('GUN'));
     expect(screen.getByTestId('target-hint').textContent).toContain('Tap an opponent');
     expect(screen.queryByTestId('target-picker')).toBeNull(); // the old name list is gone
-    expect(screen.getByTestId('lock-in').getAttribute('aria-disabled')).toBe('true');
-    await userEvent.click(screen.getByTestId('lock-in')); // not ready: nothing sent
+    expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe('button:GUN'); // the prompt is by the weapon until a target is chosen
+    expect(screen.queryByTestId('lock-in')).toBeNull(); // nothing to lock in yet
     expect(store.commits).toHaveLength(0);
 
     // opponents are highlighted as targets, you and nobody else are not
@@ -243,8 +243,10 @@ describe('Control panel: choosing, targeting and locking in', () => {
     expect(screen.getByTestId('player-p2').getAttribute('data-targeted')).toBe('true');
     expect(screen.getByTestId('reticle-p2').textContent).toContain('TARGET');
     expect(screen.getByTestId('confirm-choice').textContent).toBe('Gun → Bo');
-    await userEvent.click(screen.getByTestId('player-p3')); // changing your mind moves the target
+    expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe('card:p2'); // Lock In now floats by Bo's card
+    await userEvent.click(screen.getByTestId('player-p3')); // changing your mind moves the target (and the popup)
     expect(screen.getByTestId('confirm-choice').textContent).toBe('Gun → Cy');
+    expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe('card:p3');
     expect(screen.queryByTestId('reticle-p2')).toBeNull();
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'GUN', targets: ['p3'] }]);
@@ -282,9 +284,9 @@ describe('Control panel: choosing, targeting and locking in', () => {
     await userEvent.click(button('GUN'));
     expect(screen.getByTestId('player-p2').getAttribute('data-targetable')).toBe('true');
     expect(screen.getByTestId('player-p3').getAttribute('data-targetable')).toBeNull();
-    await userEvent.click(screen.getByTestId('player-p3'));
-    await userEvent.click(screen.getByTestId('player-p1'));
-    expect(screen.getByTestId('target-hint').textContent).toContain('Tap an opponent');
+    await userEvent.click(screen.getByTestId('player-p1')); // your own card is not a target: it counts as clicking outside
+    expect(screen.queryByTestId('lockin-popup')).toBeNull();
+    expect(store.getState().selection).toBeNull();
   });
 
   it('target cards can be reached and chosen with the keyboard (an overlay button per card)', async () => {
@@ -312,9 +314,10 @@ describe('Control panel: choosing, targeting and locking in', () => {
     const { store } = inGame(5, 3);
     mount(<Arena />, store);
     await userEvent.click(button('KATANA'));
-    expect(screen.getByTestId('target-hint').textContent).toContain('Tap up to 3 opponent cards');
+    expect(screen.getByTestId('target-hint').textContent).toContain('Tap an opponent');
     for (const id of ['p2', 'p3', 'p4', 'p5']) await userEvent.click(screen.getByTestId(`player-${id}`));
     expect(screen.getByTestId('confirm-choice').textContent).toBe('Katana → Bo, Cy, Di'); // the 4th is refused
+    expect(screen.getByTestId('target-hint').textContent).toContain('Tap up to 3 cards');
     await userEvent.click(screen.getByTestId('player-p3'));
     expect(screen.getByTestId('confirm-choice').textContent).toBe('Katana → Bo, Di');
     await userEvent.click(screen.getByTestId('lock-in'));
@@ -331,7 +334,8 @@ describe('Control panel: choosing, targeting and locking in', () => {
       expect(screen.getByTestId(`player-${id}`).getAttribute('data-targetable')).toBeNull(); // nothing to choose
     }
     expect(screen.queryByTestId('reticle-p1')).toBeNull();
-    expect(screen.getByText(/Hits every opponent: Bo, Cy, Di/)).toBeTruthy();
+    expect(screen.getByTestId('lockin-popup').textContent).toContain('Hits every opponent');
+    expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe('button:BOMB'); // no card to choose: it sits by the weapon
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'BOMB', targets: [] }]);
   });
@@ -724,20 +728,99 @@ describe('Return to lobby after the series', () => {
   });
 });
 
-describe('Confirmation drawer (no scrolling to Lock In)', () => {
-  it('opens the moment a legal action is tapped with Confirm and Cancel; Cancel closes it', async () => {
+describe('Floating Lock In popup (no bottom bar, no vertical mouse travel)', () => {
+  const rect = (x: number, y: number, w: number, h: number) =>
+    ({ x, y, left: x, top: y, width: w, height: h, right: x + w, bottom: y + h, toJSON: () => ({}) }) as DOMRect;
+
+  it('a non-targeted action gets Lock In / Cancel right at its own button', async () => {
     const { store } = inGame(2, 1);
     mount(<ControlPanel />, store);
-    expect(screen.queryByTestId('confirm-drawer')).toBeNull();
+    expect(screen.queryByTestId('lockin-popup')).toBeNull();
+    expect(screen.queryByText(/Confirm Action/)).toBeNull(); // the old bottom bar is gone
     await userEvent.click(button('DODGE'));
-    const drawer = screen.getByTestId('confirm-drawer');
-    expect(within(drawer).getByRole('button', { name: /Confirm Action \[Lock In\]/ })).toBeTruthy();
-    expect(drawer.className).toContain('fixed'); // pinned to the viewport, so it is always on screen
-    await userEvent.click(within(drawer).getByRole('button', { name: /Cancel \/ Go Back/ }));
-    expect(screen.queryByTestId('confirm-drawer')).toBeNull();
+    const popup = screen.getByTestId('lockin-popup');
+    expect(popup.getAttribute('data-anchor')).toBe('button:DODGE');
+    expect(within(popup).getByTestId('lock-in').textContent).toBe('Lock In');
+    expect(within(popup).getByRole('button', { name: /Cancel \/ Go Back/ })).toBeTruthy();
+    expect(popup.style.position).toBe('fixed');
+    await userEvent.click(within(popup).getByRole('button', { name: /Cancel \/ Go Back/ }));
+    expect(screen.queryByTestId('lockin-popup')).toBeNull();
     await userEvent.click(button('DODGE'));
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'DEFENSE', defense: 'DODGE' }]);
+    expect(screen.queryByTestId('lockin-popup')).toBeNull();
+  });
+
+  it.each([
+    ['CHARGE', 'CHARGE'],
+    ['SHIELD', 'SHIELD'],
+    ['REFLECT', 'REFLECT'],
+  ])('%s opens the popup by its own button', async (id) => {
+    mount(<ControlPanel />, inGame(2, 1).store);
+    await userEvent.click(button(id));
+    expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe(`button:${id}`);
+  });
+
+  it('clicking outside, pressing Esc or Cancel all dismiss it and reset the cards', async () => {
+    const { store } = inGame(3, 1);
+    mount(
+      <>
+        <Arena />
+        <p data-testid="elsewhere">somewhere else</p>
+      </>,
+      store,
+    );
+    await userEvent.click(button('GUN'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    expect(screen.getByTestId('lockin-popup')).toBeTruthy();
+    await userEvent.click(screen.getByTestId('elsewhere')); // outside
+    expect(screen.queryByTestId('lockin-popup')).toBeNull();
+    expect(document.querySelectorAll('[data-targetable],[data-targeted]')).toHaveLength(0);
+    expect(store.getState().selection).toBeNull();
+
+    await userEvent.click(button('GUN'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByTestId('lockin-popup')).toBeNull();
+    expect(screen.getByTestId('player-p2').getAttribute('data-targeted')).toBeNull();
+
+    // clicking the popup itself, another action or a card does NOT dismiss it
+    await userEvent.click(button('GUN'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    await userEvent.click(within(screen.getByTestId('lockin-popup')).getByTestId('confirm-choice'));
+    expect(screen.getByTestId('lockin-popup')).toBeTruthy();
+    await userEvent.click(button('KNIFE'));
+    expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe('button:KNIFE');
+  });
+
+  it('is placed from its anchor and clamped inside a small phone viewport (never clips off-screen)', async () => {
+    const { store } = inGame(3, 1);
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+    const proto = HTMLElement.prototype;
+    const rectSpy = vi.spyOn(proto, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.dataset.cardId === 'p3') return rect(300, 560, 100, 120); // a card hanging off the right/bottom edge
+      return rect(0, 0, 100, 40);
+    });
+    const widthSpy = vi.spyOn(proto, 'offsetWidth', 'get').mockReturnValue(320);
+    const heightSpy = vi.spyOn(proto, 'offsetHeight', 'get').mockReturnValue(120);
+    try {
+      mount(<Arena />, store);
+      await userEvent.click(button('GUN'));
+      await userEvent.click(screen.getByTestId('player-p3'));
+      const popup = screen.getByTestId('lockin-popup');
+      const top = parseFloat(popup.style.top);
+      const left = parseFloat(popup.style.left);
+      expect(left).toBeGreaterThanOrEqual(8);
+      expect(left + 320).toBeLessThanOrEqual(360 - 8); // inside the right edge
+      expect(top).toBeGreaterThanOrEqual(8);
+      expect(top + 120).toBeLessThanOrEqual(640 - 8); // inside the bottom edge
+      expect(top + 120).toBeLessThanOrEqual(560); // no room below the card: it floats above it
+    } finally {
+      rectSpy.mockRestore();
+      widthSpy.mockRestore();
+      heightSpy.mockRestore();
+    }
   });
 });
 

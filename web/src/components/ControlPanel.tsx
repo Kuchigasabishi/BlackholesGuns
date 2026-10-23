@@ -3,7 +3,7 @@
  * grouped by tier. Unaffordable / restricted actions are dimmed AND explain
  * why; the server's availability is the source of truth.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import {
   ATTACKS,
   ATTACK_IDS,
@@ -387,52 +387,157 @@ export function ControlPanel() {
           )}
         </div>
       )}
-      {open && !selection && <p className="mt-3 text-sm text-ink-dim">Tap an action to choose it. You will confirm on the next step.</p>}
+      {open && !selection && <p className="mt-3 text-sm text-ink-dim">Tap an action to choose it; Lock In appears right next to it.</p>}
 
-      {/* Confirmation drawer: appears as soon as a legal action is tapped, so nobody scrolls to lock in. */}
+      {/* Lock In lives right next to the decision: by the chosen target's card, or by the action button. */}
       {open && selection && (
-        <div
-          role="dialog"
-          aria-label="Confirm your action"
-          data-testid="confirm-drawer"
-          className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-neon bg-void/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.6)] backdrop-blur"
-        >
-          <div className="mx-auto max-w-2xl space-y-2">
-            <p className="bracket text-center text-sm font-bold text-ink" data-testid="confirm-choice">
-              {choiceLabel(selection.choice, nameOf)}
-            </p>
-            {selection.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode !== 'ALL_OPPONENTS' && (
-              <p data-testid="target-hint" role="status" className="text-center text-sm text-gold">
-                <span aria-hidden="true">🎯 </span>
-                {ATTACKS[selection.choice.weapon].targetMode === 'SINGLE'
-                  ? selection.choice.targets.length > 0
-                    ? `Target: ${selection.choice.targets.map(nameOf).join(', ')}. Tap another player card to change it.`
-                    : 'Tap an opponent’s card to choose your target.'
-                  : `Tap up to ${Math.min(MULTI_TARGET_LIMIT, opponents.length)} opponent cards (tap again to remove).${selection.choice.targets.length > 0 ? ` Chosen: ${selection.choice.targets.map(nameOf).join(', ')}.` : ''}`}
-              </p>
-            )}
-            {selection.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode === 'ALL_OPPONENTS' && (
-              <p className="text-center text-xs text-ink-dim">Hits every opponent: {opponents.map(nameOf).join(', ')}.</p>
-            )}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                data-testid="lock-in"
-                aria-disabled={!ready || sending}
-                onClick={() => void lockIn()}
-                className={`flex-1 rounded-lg px-4 py-3 font-black ${ready ? 'bg-ok text-void hover:brightness-110' : 'cursor-not-allowed bg-ok/25 text-ink-dim'}`}
-              >
-                Confirm Action [Lock In]
-              </button>
-              <button type="button" data-testid="cancel-action" onClick={clearSelection} className="rounded-lg border border-edge px-4 py-3 text-ink-dim hover:text-ink">
-                Cancel / Go Back
-              </button>
-            </div>
-            <p className="text-center text-xs text-ink-dim">{ready ? 'Nobody sees your choice until everyone locks in.' : 'Pick your target(s) to continue.'}</p>
-          </div>
-        </div>
+        <FloatingLockIn
+          choice={selection.choice}
+          ready={ready}
+          sending={sending}
+          nameOf={nameOf}
+          opponentCount={opponents.length}
+          onLockIn={() => void lockIn()}
+          onCancel={clearSelection}
+        />
       )}
     </section>
+  );
+}
+
+/** Where the popup attaches: the last chosen target's card (targeted attacks) or the action's own button. */
+function anchorFor(choice: Choice): { selector: string; label: string } {
+  if (choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode !== 'ALL_OPPONENTS' && choice.targets.length > 0) {
+    const id = choice.targets[choice.targets.length - 1]!;
+    return { selector: `[data-card-id="${id}"]`, label: `card:${id}` };
+  }
+  const id = choice.kind === 'ATTACK' ? choice.weapon : choice.kind === 'DEFENSE' ? choice.defense : 'CHARGE';
+  return { selector: `button[data-action="${id}"]`, label: `button:${id}` };
+}
+
+/**
+ * The context-bound Lock In popup. It is `position: fixed` and placed from the anchor's bounding box: below it when
+ * there is room, otherwise above, centred on the anchor and clamped to stay fully inside the viewport (so it never
+ * clips off a phone screen). It follows resize and scroll. Clicking outside it, Cancel or Esc dismisses it.
+ */
+function FloatingLockIn({
+  choice,
+  ready,
+  sending,
+  nameOf,
+  opponentCount,
+  onLockIn,
+  onCancel,
+}: {
+  choice: Choice;
+  ready: boolean;
+  sending: boolean;
+  nameOf: (id: PlayerId) => string;
+  opponentCount: number;
+  onLockIn: () => void;
+  onCancel: () => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const anchor = anchorFor(choice);
+
+  const place = useCallback(() => {
+    const el = box.current;
+    if (!el) return;
+    const margin = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const target = document.querySelector(anchor.selector);
+    let top: number;
+    let left: number;
+    if (target) {
+      const r = target.getBoundingClientRect();
+      top = r.bottom + margin;
+      if (top + h > vh - margin) top = r.top - h - margin; // no room below: float above
+      left = r.left + r.width / 2 - w / 2;
+    } else {
+      top = vh - h - margin; // anchor missing: fall back to the bottom edge
+      left = (vw - w) / 2;
+    }
+    top = Math.max(margin, Math.min(top, vh - h - margin));
+    left = Math.max(margin, Math.min(left, vw - w - margin));
+    setPos((p) => (p && p.top === top && p.left === left ? p : { top, left }));
+  }, [anchor.selector]);
+
+  // Bring the anchor into view first (phones scroll), then place; re-place after every render, on resize and on scroll.
+  useLayoutEffect(() => {
+    const target = document.querySelector(anchor.selector) as (Element & { scrollIntoView?: (o?: ScrollIntoViewOptions) => void }) | null;
+    target?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [anchor.selector]);
+  useLayoutEffect(() => {
+    place();
+  });
+  useEffect(() => {
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [place]);
+
+  // Clicking anywhere that is not this popup, an action button or a target card dismisses it.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Element | null;
+      if (!t?.closest('[data-lockin-popup], [data-action], [data-targetable]')) onCancel();
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [onCancel]);
+
+  const aimed = choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode !== 'ALL_OPPONENTS';
+  const multi = choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode === 'UP_TO_THREE';
+  return (
+    <div
+      ref={box}
+      role="dialog"
+      aria-label="Lock in your action"
+      data-testid="lockin-popup"
+      data-lockin-popup
+      data-anchor={anchor.label}
+      style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0, visibility: pos ? 'visible' : 'hidden' }}
+      className="z-40 w-[min(20rem,calc(100vw-1rem))] space-y-2 rounded-xl border-2 border-neon bg-void/95 p-3 shadow-[0_0_24px_rgba(62,230,255,0.45)] backdrop-blur"
+    >
+      <p className="bracket text-center text-sm font-bold text-ink" data-testid="confirm-choice">
+        {choiceLabel(choice, nameOf)}
+      </p>
+      {aimed && choice.kind === 'ATTACK' && (
+        <p data-testid="target-hint" role="status" className="text-center text-xs text-gold">
+          <span aria-hidden="true">🎯 </span>
+          {choice.targets.length === 0
+            ? 'Tap an opponent’s card to choose your target.'
+            : multi
+              ? `Tap up to ${Math.min(MULTI_TARGET_LIMIT, opponentCount)} cards (tap again to remove).`
+              : 'Tap another card to change the target.'}
+        </p>
+      )}
+      {choice.kind === 'ATTACK' && !aimed && <p className="text-center text-xs text-ink-dim">Hits every opponent.</p>}
+      <div className="flex gap-2">
+        {(!aimed || ready) && (
+          <button
+            type="button"
+            data-testid="lock-in"
+            aria-disabled={!ready || sending}
+            onClick={onLockIn}
+            className={`flex-1 rounded-lg px-3 py-2.5 font-black ${ready ? 'bg-ok text-void hover:brightness-110' : 'cursor-not-allowed bg-ok/25 text-ink-dim'}`}
+          >
+            Lock In
+          </button>
+        )}
+        <button type="button" data-testid="cancel-action" onClick={onCancel} className="rounded-lg border border-edge px-3 py-2.5 text-sm text-ink-dim hover:text-ink">
+          Cancel / Go Back
+        </button>
+      </div>
+      {(!aimed || ready) && <p className="text-center text-[11px] text-ink-dim">Nobody sees your choice until everyone locks in.</p>}
+    </div>
   );
 }
 

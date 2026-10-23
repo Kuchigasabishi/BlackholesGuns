@@ -103,6 +103,18 @@ export function LobbyScreen() {
                     <p className="text-ink-dim">Waiting for player {seat + 1}…</p>
                   )}
                 </div>
+                {player && isHost && player.playerId !== session.playerId && (
+                  <button
+                    type="button"
+                    data-testid={`kick-${player.playerId}`}
+                    aria-label={`Kick ${player.displayName}`}
+                    title={`Remove ${player.displayName} from the room`}
+                    onClick={() => void store.kickPlayer(player.playerId)}
+                    className="bracket ml-auto shrink-0 rounded border border-danger px-2 py-1 text-xs font-bold text-danger hover:bg-danger/15"
+                  >
+                    <span aria-hidden="true">❌ </span>Kick
+                  </button>
+                )}
               </li>
             );
           })}

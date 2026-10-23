@@ -67,6 +67,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
   const emitterFor = (code: string): RoomEmitter => ({
     toRoom: (event, payload) => void io.to(roomChannel(code)).emit(event, payload),
     toPlayer: (playerId, event, payload) => void io.to(playerChannel(code, playerId)).emit(event, payload),
+    disconnectPlayer: (playerId) => void io.in(playerChannel(code, playerId)).disconnectSockets(true),
   });
 
   const createRoom = (): Room => {
@@ -175,6 +176,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     return {};
   });
 
+  const onKick = handle((payload, socket) => {
+    const { room, playerId } = requireBinding(socket);
+    room.kick(playerId, (payload as { playerId?: unknown } | null)?.playerId);
+    return {};
+  });
+
   const onLeave = handle((_payload, socket) => {
     const { room, playerId } = requireBinding(socket);
     socket.leave(roomChannel(room.code));
@@ -197,6 +204,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     socket.on(ClientEvents.start, onStart(socket));
     socket.on(ClientEvents.setSeriesTarget, onSetSeriesTarget(socket));
     socket.on(ClientEvents.abort, onAbort(socket));
+    socket.on(ClientEvents.kick, onKick(socket));
     socket.on(ClientEvents.leave, onLeave(socket));
     socket.on(ClientEvents.commit, onCommit(socket));
     socket.on('disconnect', () => {

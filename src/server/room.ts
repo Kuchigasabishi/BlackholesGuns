@@ -58,6 +58,8 @@ export class RoomError extends Error {
 export interface RoomEmitter {
   toRoom(event: string, payload: unknown): void;
   toPlayer(playerId: PlayerId, event: string, payload: unknown): void;
+  /** Forcefully closes every socket bound to this player (an evicted player). */
+  disconnectPlayer(playerId: PlayerId): void;
 }
 
 /** One hook per §10 stage. Server-internal (hooks see hidden data); used by telemetry in Phase 3. */
@@ -270,7 +272,7 @@ export class Room {
    * §10 timeout rule). They are eliminated at once and sit out the series, the commit window restarts for the
    * rest so nobody waits on them, and the host role moves on if the host was the one leaving.
    */
-  private quitGame(member: Member): void {
+  private quitGame(member: Member, kicked = false): void {
     const { playerId } = member;
     if (this.game?.series.departed.includes(playerId)) return;
     member.socketId = null;
@@ -282,7 +284,7 @@ export class Room {
       const result = forfeitPlayers(this.game, [playerId]);
       this.game = result.state;
       this.replayEntries.push({ type: 'OVERRIDE', reason: `quit:${playerId}`, state: this.game });
-      this.deps.emitter.toRoom(ServerEvents.playerQuit, { playerId, displayName: member.displayName });
+      this.deps.emitter.toRoom(ServerEvents.playerQuit, { playerId, displayName: member.displayName, kicked });
       this.deps.emitter.toRoom(ServerEvents.stateSync, { reason: 'quit', state: this.game });
       if (result.transition === 'SERIES_ENDED') {
         this.endSeries();
@@ -301,6 +303,22 @@ export class Room {
     }
     this.deps.emitter.toRoom(ServerEvents.lobbyUpdate, this.lobbyView());
     this.checkEmpty();
+  }
+
+  /**
+   * Host only: evict a player. In the lobby they are removed from the roster. Mid-game they are eliminated at
+   * once (same path as a quit: new round / match for the survivors, no waiting on them, and the series ends if one
+   * participant is left), their seat is closed to them for the rest of the series, and their socket is cut.
+   */
+  kick(requesterId: PlayerId, targetId: unknown): void {
+    if (requesterId !== this.hostId) throw new RoomError('NOT_HOST', 'Only the host can remove a player');
+    if (typeof targetId !== 'string' || !this.members.has(targetId)) throw new RoomError('BAD_PAYLOAD', 'No such player in this room');
+    if (targetId === requesterId) throw new RoomError('BAD_PAYLOAD', 'You cannot remove yourself: use Quit instead');
+    const member = this.members.get(targetId)!;
+    this.deps.emitter.toPlayer(targetId, ServerEvents.playerKicked, { reason: 'KICKED_BY_HOST' });
+    if (this.status === 'LOBBY') this.removeFromLobby(targetId);
+    else if (this.status === 'IN_GAME') this.quitGame(member, true);
+    this.deps.emitter.disconnectPlayer(targetId);
   }
 
   /** Host only: abort the running series. Everyone returns to the waiting lobby with the scores discarded. */

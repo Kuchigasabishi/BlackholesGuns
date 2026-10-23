@@ -984,3 +984,61 @@ describe('Card visuals: identity under the lock shader, target glow and reticle'
     expect(body).not.toMatch(/box-shadow|width|height|margin|border/); // opacity only
   });
 });
+
+describe('Host kick controls', () => {
+  const lobbyAs = (me: string, n = 3) => {
+    let s = reducer(initialState, { type: 'connection', status: 'connected' });
+    s = reducer(s, { type: 'session', session: { roomCode: 'K7M2QP', playerId: me, playerToken: 't' } });
+    s = reducer(s, { type: 'lobby', lobby: lobbyView(n, { hostId: 'p1' }) });
+    return stubStore(s);
+  };
+
+  it('lobby: the host sees a Kick button on every guest row (not on themself); guests see none', async () => {
+    const store = lobbyAs('p1');
+    mount(<LobbyScreen />, store);
+    expect(screen.queryByTestId('kick-p1')).toBeNull();
+    await userEvent.click(screen.getByTestId('kick-p3'));
+    expect(store.kicks).toEqual(['p3']);
+    expect(screen.getByTestId('kick-p2')).toBeTruthy();
+    cleanup();
+    mount(<LobbyScreen />, lobbyAs('p2'));
+    expect(screen.queryByTestId('kick-p3')).toBeNull();
+  });
+
+  const gameAs = (me: string, opts: { offline?: string; locked?: string[] } = {}) => {
+    const game = newGame(3);
+    const withOffline = opts.offline ? { ...game, players: { ...game.players, [opts.offline]: { ...game.players[opts.offline]!, connectionStatus: 'DISCONNECTED' as const } } } : game;
+    let s = clientStateFor(withOffline, me);
+    s = reducer(s, { type: 'lobby', lobby: lobbyView(3, { status: 'IN_GAME', hostId: 'p1' }) });
+    if (opts.locked) s = reducer(s, { type: 'progress', turnId: game.turn!.turnId, lockedPlayerIds: opts.locked });
+    return stubStore(s);
+  };
+
+  it('in game: shown over the card of an offline opponent, to the host only, with a confirmation step', async () => {
+    const store = gameAs('p1', { offline: 'p3' });
+    mount(<Roster />, store);
+    expect(screen.queryByTestId('kick-p2')).toBeNull(); // online and not stalling
+    await userEvent.click(screen.getByTestId('kick-p3'));
+    expect(store.kicks).toEqual([]); // asks first
+    await userEvent.click(screen.getByTestId('kick-no-p3'));
+    await userEvent.click(screen.getByTestId('kick-p3'));
+    await userEvent.click(screen.getByTestId('kick-yes-p3'));
+    expect(store.kicks).toEqual(['p3']);
+    cleanup();
+    mount(<Roster />, gameAs('p2', { offline: 'p3' })); // a non-host never gets it
+    expect(screen.queryByTestId('kick-p3')).toBeNull();
+  });
+
+  it('in game: also offered for the one player still holding up the commit window', () => {
+    mount(<Roster />, gameAs('p1', { locked: ['p1', 'p2'] }));
+    expect(screen.getByTestId('kick-p3')).toBeTruthy();
+    expect(screen.queryByTestId('kick-p2')).toBeNull(); // already locked in
+  });
+
+  it('being kicked returns the player to the home screen with a message', () => {
+    const store = gameAs('p2');
+    act(() => store.dispatch({ type: 'kicked' }));
+    expect(screenOf(store.getState())).toBe('home');
+    expect(store.getState().notice).toContain('removed you');
+  });
+});

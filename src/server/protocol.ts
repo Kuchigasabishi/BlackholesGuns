@@ -21,6 +21,8 @@ export const ClientEvents = {
   start: 'game:start',
   /** Host only, mid-game: abort the series and send everyone back to the lobby. */
   abort: 'game:abort',
+  /** Host only: evict a player (lobby or mid-game). Payload: { playerId }. */
+  kick: 'player:kick',
   commit: 'action:commit',
 } as const;
 
@@ -45,6 +47,8 @@ export const ServerEvents = {
   seriesAborted: 'series:aborted',
   /** A player quit mid-game and was eliminated (state arrives separately as state:sync). */
   playerQuit: 'player:quit',
+  /** Sent only to the evicted player just before their socket is closed. */
+  playerKicked: 'player:kicked',
   roomClosed: 'room:closed',
 } as const;
 

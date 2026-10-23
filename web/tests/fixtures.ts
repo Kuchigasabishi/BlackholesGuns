@@ -119,6 +119,7 @@ export interface StubStore extends GameStore {
   readonly commits: unknown[];
   readonly started: number;
   readonly aborted: number;
+  readonly kicks: string[];
   readonly targets: number[];
   set(state: ClientState): void;
 }
@@ -133,6 +134,7 @@ export function stubStore(initial: ClientState = initialState): StubStore {
   const commits: unknown[] = [];
   let started = 0;
   let aborted = 0;
+  const kicks: string[] = [];
   const targets: number[] = [];
   const store: StubStore = {
     ...base,
@@ -140,6 +142,11 @@ export function stubStore(initial: ClientState = initialState): StubStore {
     targets,
     get started() {
       return started;
+    },
+    kicks,
+    async kickPlayer(playerId: string) {
+      kicks.push(playerId);
+      return true;
     },
     get aborted() {
       return aborted;

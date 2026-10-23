@@ -235,6 +235,12 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
   const isFoe = !isOwn && p.alive;
   const targetable = sel !== null && !aimsAtAll && isFoe;
   const targeted = sel !== null && isFoe && (aimsAtAll || sel.targets.includes(id));
+  // Host-only eviction: offered for an opponent whose connection dropped, or who is the last one holding up the commit window.
+  const [kickAsk, setKickAsk] = useState(false);
+  const iAmHost = state.lobby?.hostId === session!.playerId;
+  const othersLocked = game!.series.lobby.filter((x) => x !== id && game!.players[x]?.alive).every((x) => state.lockedPlayerIds.includes(x));
+  const stalling = state.stage === 'COMMIT' && !state.lockedPlayerIds.includes(id) && othersLocked;
+  const canKick = iAmHost && !isOwn && p.alive && (p.connectionStatus === 'DISCONNECTED' || stalling);
   const wins = p.matchWins;
   // §12 fog of war: only your own Charge is ever shown.
   const chargeDisplay = !alive ? '—' : isOwn ? String(held ? (state.lastResult?.outcome.playerResults.find((r) => r.playerId === id)?.chargeBefore ?? p.charge) : p.charge) : '?';
@@ -254,6 +260,24 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
     >
       {targetable && (
         <button type="button" data-testid={`target-${id}`} aria-pressed={targeted} aria-label={`Target ${nameOf(id)}`} className="absolute inset-0 z-30 cursor-pointer rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-neon" />
+      )}
+      {canKick && (
+        <span className="absolute bottom-1 right-1 z-40 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {kickAsk ? (
+            <>
+              <button type="button" data-testid={`kick-yes-${id}`} onClick={() => { setKickAsk(false); void store.kickPlayer(id); }} className="bracket rounded border border-danger bg-danger/25 px-2 py-0.5 text-[11px] font-bold text-danger">
+                Remove {nameOf(id)}?
+              </button>
+              <button type="button" data-testid={`kick-no-${id}`} aria-label="Cancel" onClick={() => setKickAsk(false)} className="bracket rounded border border-edge bg-void px-1.5 py-0.5 text-[11px] text-ink-dim">
+                ✖
+              </button>
+            </>
+          ) : (
+            <button type="button" data-testid={`kick-${id}`} aria-label={`Kick ${nameOf(id)}`} title={p.connectionStatus === 'DISCONNECTED' ? 'This player is offline' : 'This player is holding up the turn'} onClick={() => setKickAsk(true)} className="bracket rounded border border-danger bg-void/90 px-2 py-0.5 text-[11px] font-bold text-danger hover:bg-danger/20">
+              <span aria-hidden="true">❌ </span>Kick
+            </button>
+          )}
+        </span>
       )}
       {targeted && (
         <span data-testid={`reticle-${id}`} className="bracket pointer-events-none absolute -left-1 -top-2 z-20 rounded border-2 border-danger bg-void px-2 py-0.5 text-xs font-black text-danger shadow-[0_0_12px_rgba(255,59,92,0.9)]">

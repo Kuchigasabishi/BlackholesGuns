@@ -94,6 +94,7 @@ export type ClientAction =
   | { type: 'seriesEnded'; winnerId: PlayerId | null; matchWins: Readonly<Record<PlayerId, number>> }
   | { type: 'committed'; turnId: string; action: ActionPayload }
   | { type: 'roomClosed' }
+  | { type: 'kicked' }
   | { type: 'error'; message: string | null }
   | { type: 'notice'; message: string | null }
   | { type: 'dismissPhaseNotice' }
@@ -317,6 +318,9 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
               : state.lockedPlayerIds,
           }
         : state;
+
+    case 'kicked':
+      return { ...initialState, connection: state.connection, notice: 'The host removed you from the room.' };
 
     case 'roomClosed':
       return { ...initialState, connection: state.connection, notice: 'The room was closed.' };

@@ -45,6 +45,8 @@ export interface GameStore {
   setSeriesTarget(target: number): Promise<boolean>;
   /** Host only, mid-game: abort the series and send everyone back to the lobby. */
   abortSeries(): Promise<boolean>;
+  /** Host only: evict a player (lobby or mid-game). */
+  kickPlayer(playerId: PlayerId): Promise<boolean>;
   startGame(): Promise<boolean>;
   leaveRoom(): Promise<void>;
   commit(choice: Choice): Promise<boolean>;
@@ -147,7 +149,11 @@ export function createGameStore(options: StoreOptions = {}): GameStore {
   socket.on(ServerEvents.seriesEnded, (p) => dispatch({ type: 'seriesEnded', winnerId: p.winnerId, matchWins: p.matchWins }));
   socket.on(ServerEvents.seriesAborted, () => dispatch({ type: 'seriesAborted', notice: 'The host returned everyone to the lobby.' }));
   socket.on(ServerEvents.playerQuit, (p) => {
-    if (p.playerId !== state.session?.playerId) dispatch({ type: 'notice', message: `${p.displayName} left the match and was eliminated.` });
+    if (p.playerId !== state.session?.playerId) dispatch({ type: 'notice', message: p.kicked ? `${p.displayName} was removed by the host and eliminated.` : `${p.displayName} left the match and was eliminated.` });
+  });
+  socket.on(ServerEvents.playerKicked, () => {
+    saveSession(null);
+    dispatch({ type: 'kicked' });
   });
   socket.on(ServerEvents.roomClosed, () => {
     saveSession(null);
@@ -194,6 +200,12 @@ export function createGameStore(options: StoreOptions = {}): GameStore {
 
     async setSeriesTarget(target) {
       const ack = await request(ClientEvents.setSeriesTarget, { target });
+      if (!ack.ok) dispatch({ type: 'error', message: messageFor(ack.code, ack.message) });
+      return ack.ok;
+    },
+
+    async kickPlayer(playerId) {
+      const ack = await request(ClientEvents.kick, { playerId });
       if (!ack.ok) dispatch({ type: 'error', message: messageFor(ack.code, ack.message) });
       return ack.ok;
     },

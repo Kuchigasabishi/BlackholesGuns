@@ -2,7 +2,8 @@
  * Pure client state. The server is authoritative; this only mirrors what the
  * server has told THIS player (public state plus their own private view).
  */
-import type { ActionAvailability, GameState, Phase, PlayerId } from '../../../src/engine';
+import { ATTACKS, MULTI_TARGET_LIMIT, type ActionAvailability, type GameState, type Phase, type PlayerId } from '../../../src/engine';
+import type { Choice } from '../net/store';
 import type {
   ActionPayload,
   LobbyView,
@@ -47,6 +48,8 @@ export interface ClientState {
   readonly log: readonly TurnLog[];
   /** Set when a phase begins so the UI can warn once (§13). */
   readonly phaseNotice: Phase | null;
+  /** The action the local player has picked but not locked in yet (targets are picked by clicking player cards). */
+  readonly selection: Choice | null;
   /** The turn whose Turn Resolution popup the player has closed (so it does not reopen). */
   readonly resolutionDismissed: string | null;
   readonly seriesEnd: { readonly winnerId: PlayerId | null; readonly matchWins: Readonly<Record<PlayerId, number>> } | null;
@@ -68,6 +71,7 @@ export const initialState: ClientState = {
   revealed: null,
   log: [],
   phaseNotice: null,
+  selection: null,
   resolutionDismissed: null,
   seriesEnd: null,
   error: null,
@@ -95,8 +99,15 @@ export type ClientAction =
   | { type: 'dismissPhaseNotice' }
   | { type: 'seriesAcknowledged' }
   | { type: 'resolutionDismissed'; turnId: string }
+  | { type: 'selectChoice'; choice: Choice }
+  | { type: 'toggleTarget'; playerId: PlayerId }
+  | { type: 'clearSelection' }
   | { type: 'seriesAborted'; notice: string }
   | { type: 'reset' };
+
+/** Opponents of the local player who are still alive: the only valid targets. */
+export const livingOpponents = (state: Pick<ClientState, 'game' | 'session'>): PlayerId[] =>
+  state.game ? state.game.series.lobby.filter((id) => id !== state.session?.playerId && state.game!.players[id]?.alive) : [];
 
 export const nameLookup = (state: Pick<ClientState, 'lobby'>): NameOf => {
   const names = new Map((state.lobby?.players ?? []).map((p) => [p.playerId, p.displayName]));
@@ -149,6 +160,7 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
         availability: t?.availability ?? null,
         lockedPlayerIds: t?.lockedPlayerIds ?? [],
         ownCommit: t?.ownCommit?.action ?? null,
+        selection: null,
         lastResult: view.lastResult,
         revealed: t?.stage === 'BETWEEN_TURNS' && view.lastResult ? view.lastResult.actions : null,
         log,
@@ -175,6 +187,7 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
         availability: null,
         lockedPlayerIds: [],
         ownCommit: null,
+        selection: null,
         lastResult: null,
         revealed: null,
         log: [],
@@ -184,6 +197,33 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
         notice: action.notice,
       };
 
+    case 'selectChoice': {
+      let choice = action.choice;
+      if (choice.kind === 'ATTACK') {
+        const mode = ATTACKS[choice.weapon].targetMode;
+        const foes = livingOpponents(state);
+        if (mode === 'SINGLE' && foes.length === 1) choice = { ...choice, targets: [foes[0]!] };
+        if (mode === 'ALL_OPPONENTS') choice = { ...choice, targets: [] };
+      }
+      return { ...state, selection: choice };
+    }
+
+    case 'toggleTarget': {
+      const choice = state.selection;
+      if (!choice || choice.kind !== 'ATTACK' || !livingOpponents(state).includes(action.playerId)) return state;
+      const mode = ATTACKS[choice.weapon].targetMode;
+      if (mode === 'ALL_OPPONENTS') return state;
+      const has = choice.targets.includes(action.playerId);
+      let targets: PlayerId[];
+      if (mode === 'SINGLE') targets = [action.playerId];
+      else if (has) targets = choice.targets.filter((t) => t !== action.playerId);
+      else targets = choice.targets.length >= MULTI_TARGET_LIMIT ? [...choice.targets] : [...choice.targets, action.playerId];
+      return { ...state, selection: { ...choice, targets } };
+    }
+
+    case 'clearSelection':
+      return state.selection === null ? state : { ...state, selection: null };
+
     case 'resolutionDismissed':
       return { ...state, resolutionDismissed: action.turnId };
 
@@ -191,7 +231,7 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
       return { ...state, game: null, lastResult: null, revealed: null, seriesEnd: null, log: [] };
 
     case 'gameStarted':
-      return { ...state, lobby: action.lobby, game: action.state, log: [], lastResult: null, seriesEnd: null };
+      return { ...state, lobby: action.lobby, game: action.state, log: [], lastResult: null, seriesEnd: null, selection: null };
 
     case 'turnOpen': {
       const open = toOpenTurn(action.payload, action.receivedAt);
@@ -204,6 +244,7 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
         lockedPlayerIds: action.payload.turnId === state.turn?.turnId ? state.lockedPlayerIds : [],
         ownCommit: action.payload.turnId === state.turn?.turnId ? state.ownCommit : null,
         revealed: null,
+        selection: action.payload.turnId === state.turn?.turnId ? state.selection : null,
         phaseNotice: phaseWarning(previousPhase, open.phase) ?? state.phaseNotice,
       };
     }
@@ -227,6 +268,7 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
         stage: action.payload.state.series.status === 'COMPLETE' ? 'NONE' : 'BETWEEN_TURNS',
         availability: null,
         ownCommit: null,
+        selection: null,
         lockedPlayerIds: [],
         log: [...state.log, describeTurn(action.payload, names, state.session?.playerId ?? null)],
       };
@@ -236,6 +278,7 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
       return {
         ...state,
         game: action.state,
+        selection: null, // the roster may have changed (someone quit): pick again
         // Cached availability may belong to the old state; the panel recomputes from the new one until the server's arrives.
         availability: null,
         turn: state.turn && action.state.turn ? { ...state.turn, phase: action.state.turn.phase } : state.turn,
@@ -267,6 +310,7 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
       return state.turn?.turnId === action.turnId
         ? {
             ...state,
+            selection: null, // locked in: the player cards go back to neutral
             ownCommit: action.action,
             lockedPlayerIds: state.session && !state.lockedPlayerIds.includes(state.session.playerId)
               ? [...state.lockedPlayerIds, state.session.playerId]

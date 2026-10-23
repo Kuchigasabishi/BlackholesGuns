@@ -226,6 +226,15 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
   const locked = state.stage === 'COMMIT' && alive && state.lockedPlayerIds.includes(id);
   const line = actionLine(state, id, nameOf);
   const isOwn = id === session!.playerId;
+  // Card-click targeting: while the local player is choosing a target for an attack, living opponents' cards are the buttons.
+  const store = useStore();
+  const me = game!.players[session!.playerId];
+  const youCanAct = state.stage === 'COMMIT' && !!me?.alive && state.ownCommit === null && !state.lockedPlayerIds.includes(session!.playerId);
+  const sel = youCanAct && state.selection?.kind === 'ATTACK' ? state.selection : null;
+  const aimsAtAll = sel !== null && ATTACKS[sel.weapon].targetMode === 'ALL_OPPONENTS';
+  const isFoe = !isOwn && p.alive;
+  const targetable = sel !== null && !aimsAtAll && isFoe;
+  const targeted = sel !== null && isFoe && (aimsAtAll || sel.targets.includes(id));
   const wins = p.matchWins;
   // §12 fog of war: only your own Charge is ever shown.
   const chargeDisplay = !alive ? '—' : isOwn ? String(held ? (state.lastResult?.outcome.playerResults.find((r) => r.playerId === id)?.chargeBefore ?? p.charge) : p.charge) : '?';
@@ -236,10 +245,21 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
       data-testid={`player-${id}`}
       data-card-id={id}
       data-eliminated={!alive}
+      data-targetable={targetable || undefined}
+      data-targeted={targeted || undefined}
+      onClick={targetable ? () => store.dispatch({ type: 'toggleTarget', playerId: id }) : undefined}
       data-crumble={phase === 'crumbling' || undefined}
       aria-label={`${nameOf(id)}${isOwn ? ' (you)' : ''}, ${alive ? 'alive' : 'eliminated'}, ${isOwn ? `${chargeDisplay} charge` : 'charge hidden'}, ${wins} match wins`}
-      className={`neon-box relative flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''}`}
+      className={`neon-box relative flex flex-col items-center rounded-xl px-2 pb-3 pt-6 text-center ${alive ? '' : 'opacity-80'} ${isOwn ? 'ring-2 ring-neon' : ''} ${targetable ? 'cursor-pointer outline-2 outline-dashed outline-gold/80 hover:bg-white/5' : ''} ${targeted ? 'ring-2 ring-danger' : ''}`}
     >
+      {targetable && (
+        <button type="button" data-testid={`target-${id}`} aria-pressed={targeted} aria-label={`Target ${nameOf(id)}`} className="absolute inset-0 z-30 cursor-pointer rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-neon" />
+      )}
+      {targeted && (
+        <span data-testid={`reticle-${id}`} className="bracket pointer-events-none absolute left-1 top-1 z-20 rounded border border-danger bg-void/90 px-1.5 py-0.5 text-[11px] font-bold text-danger">
+          <span aria-hidden="true">🎯 </span>TARGET
+        </span>
+      )}
       {line && (
         <span data-testid={`reveal-${id}`} className={`bracket absolute -top-3 left-1/2 w-max max-w-[96%] -translate-x-1/2 rounded border border-neon bg-void px-2 py-0.5 text-center text-xs leading-tight break-words text-neon ${animate ? 'anim-pop' : ''}`}>
           {line}

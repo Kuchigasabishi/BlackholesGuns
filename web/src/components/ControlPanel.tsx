@@ -196,7 +196,9 @@ export function ControlPanel() {
   const nameOf = nameLookup(state);
   const me = session && game ? game.players[session.playerId] : undefined;
 
-  const [selection, setSelection] = useState<Selection>(null);
+  // The pick lives in the shared client state so the player cards in the arena can show and set the targets.
+  const selection: Selection = state.selection ? { choice: state.selection } : null;
+  const clearSelection = useCallback(() => store.dispatch({ type: 'clearSelection' }), [store]);
   const [hint, setHint] = useState<string>('');
   const [sending, setSending] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -218,38 +220,11 @@ export function ControlPanel() {
 
   // A new turn starts with a clean slate.
   useEffect(() => {
-    setSelection(null);
     setHint('');
   }, [turn?.turnId]);
 
-  const select = useCallback(
-    (choice: Choice) => {
-      if (choice.kind === 'ATTACK') {
-        const mode = ATTACKS[choice.weapon].targetMode;
-        if (mode === 'SINGLE' && opponents.length === 1) choice = { ...choice, targets: [opponents[0]!] };
-        if (mode === 'ALL_OPPONENTS') choice = { ...choice, targets: [] };
-      }
-      setSelection({ choice });
-    },
-    [opponents],
-  );
-
-  const toggleTarget = useCallback(
-    (id: PlayerId) => {
-      setSelection((current) => {
-        if (!current || current.choice.kind !== 'ATTACK') return current;
-        const { choice } = current;
-        const mode = ATTACKS[choice.weapon].targetMode;
-        const has = choice.targets.includes(id);
-        let targets: PlayerId[];
-        if (mode === 'SINGLE') targets = [id];
-        else if (has) targets = choice.targets.filter((t) => t !== id);
-        else targets = choice.targets.length >= MULTI_TARGET_LIMIT ? [...choice.targets] : [...choice.targets, id];
-        return { choice: { ...choice, targets } };
-      });
-    },
-    [],
-  );
+  const select = useCallback((choice: Choice) => store.dispatch({ type: 'selectChoice', choice }), [store]);
+  const toggleTarget = useCallback((playerId: PlayerId) => store.dispatch({ type: 'toggleTarget', playerId }), [store]);
 
   const ready = selection !== null && targetsReady(selection.choice, opponents);
 
@@ -264,6 +239,16 @@ export function ControlPanel() {
     }
   }, [selection, opponents, sending, store]);
 
+  // Esc always resets the pick (and with it the highlighted player cards), whatever the keyboard mode.
+  useEffect(() => {
+    if (!selection) return;
+    const onEsc = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') clearSelection();
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [selection, clearSelection]);
+
   // ---- keyboard: single-key shortcuts (only when the user turned Keyboard mode on)
   useEffect(() => {
     if (!keyboardMode) return;
@@ -271,7 +256,6 @@ export function ControlPanel() {
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (e.key === 'Escape') return setSelection(null);
       if (!open) return;
       const key = e.key.toLowerCase();
       if (key === 'c' && availability?.charge.available) return select({ kind: 'CHARGE' });
@@ -418,25 +402,14 @@ export function ControlPanel() {
               {choiceLabel(selection.choice, nameOf)}
             </p>
             {selection.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode !== 'ALL_OPPONENTS' && (
-              <fieldset className="rounded-lg border border-edge p-2" data-testid="target-picker">
-                <legend className="px-2 text-xs text-ink-dim">
-                  {ATTACKS[selection.choice.weapon].targetMode === 'SINGLE'
-                    ? `Choose 1 target for ${ATTACKS[selection.choice.weapon].name}`
-                    : `Choose up to ${Math.min(MULTI_TARGET_LIMIT, opponents.length)} targets for ${ATTACKS[selection.choice.weapon].name}`}
-                </legend>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {opponents.map((id, i) => {
-                    const on = selection.choice.kind === 'ATTACK' && selection.choice.targets.includes(id);
-                    return (
-                      <button key={id} type="button" aria-pressed={on} onClick={() => toggleTarget(id)} className={`bracket rounded-lg border px-3 py-2 text-sm ${on ? 'border-gold bg-gold/20 text-gold' : 'border-edge hover:bg-white/5'}`}>
-                        {keyboardMode && <span className="mr-1 text-ink-dim">{i + 1}</span>}
-                        {on ? '✔ ' : ''}
-                        {nameOf(id)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
+              <p data-testid="target-hint" role="status" className="text-center text-sm text-gold">
+                <span aria-hidden="true">🎯 </span>
+                {ATTACKS[selection.choice.weapon].targetMode === 'SINGLE'
+                  ? selection.choice.targets.length > 0
+                    ? `Target: ${selection.choice.targets.map(nameOf).join(', ')}. Tap another player card to change it.`
+                    : 'Tap an opponent’s card to choose your target.'
+                  : `Tap up to ${Math.min(MULTI_TARGET_LIMIT, opponents.length)} opponent cards (tap again to remove).${selection.choice.targets.length > 0 ? ` Chosen: ${selection.choice.targets.map(nameOf).join(', ')}.` : ''}`}
+              </p>
             )}
             {selection.choice.kind === 'ATTACK' && ATTACKS[selection.choice.weapon].targetMode === 'ALL_OPPONENTS' && (
               <p className="text-center text-xs text-ink-dim">Hits every opponent: {opponents.map(nameOf).join(', ')}.</p>
@@ -451,7 +424,7 @@ export function ControlPanel() {
               >
                 Confirm Action [Lock In]
               </button>
-              <button type="button" data-testid="cancel-action" onClick={() => setSelection(null)} className="rounded-lg border border-edge px-4 py-3 text-ink-dim hover:text-ink">
+              <button type="button" data-testid="cancel-action" onClick={clearSelection} className="rounded-lg border border-edge px-4 py-3 text-ink-dim hover:text-ink">
                 Cancel / Go Back
               </button>
             </div>

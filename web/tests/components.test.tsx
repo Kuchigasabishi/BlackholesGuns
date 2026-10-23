@@ -38,6 +38,14 @@ const inGame = (n: number, charge: number, extra: Parameters<typeof withCharges>
   return { game, store: stubStore(clientStateFor(game, 'p1')) };
 };
 
+/** The arena roster (clickable target cards) next to the control panel, as on the real game screen. */
+const Arena = () => (
+  <>
+    <Roster />
+    <ControlPanel />
+  </>
+);
+
 // ------------------------------------------------------------------------ lobby
 
 describe('Lobby screen', () => {
@@ -216,20 +224,77 @@ describe('Control panel: names, costs and affordability (Figure 1)', () => {
 });
 
 describe('Control panel: choosing, targeting and locking in', () => {
-  it('a targeted attack asks for a target, then commits it', async () => {
+  it('a targeted attack asks you to tap an opponent card, then commits that target', async () => {
     const { store } = inGame(3, 1);
-    mount(<ControlPanel />, store);
+    mount(<Arena />, store);
     await userEvent.click(button('GUN'));
-    const picker = screen.getByTestId('target-picker');
-    expect(within(picker).getByText('Choose 1 target for Gun')).toBeTruthy();
+    expect(screen.getByTestId('target-hint').textContent).toContain('Tap an opponent');
+    expect(screen.queryByTestId('target-picker')).toBeNull(); // the old name list is gone
     expect(screen.getByTestId('lock-in').getAttribute('aria-disabled')).toBe('true');
     await userEvent.click(screen.getByTestId('lock-in')); // not ready: nothing sent
     expect(store.commits).toHaveLength(0);
 
-    await userEvent.click(within(picker).getByRole('button', { name: 'Bo' }));
+    // opponents are highlighted as targets, you and nobody else are not
+    expect(screen.getByTestId('player-p2').getAttribute('data-targetable')).toBe('true');
+    expect(screen.getByTestId('player-p3').getAttribute('data-targetable')).toBe('true');
+    expect(screen.getByTestId('player-p1').getAttribute('data-targetable')).toBeNull();
+
+    await userEvent.click(screen.getByTestId('player-p2')); // tap the card itself
+    expect(screen.getByTestId('player-p2').getAttribute('data-targeted')).toBe('true');
+    expect(screen.getByTestId('reticle-p2').textContent).toContain('TARGET');
     expect(screen.getByTestId('confirm-choice').textContent).toBe('Gun → Bo');
+    await userEvent.click(screen.getByTestId('player-p3')); // changing your mind moves the target
+    expect(screen.getByTestId('confirm-choice').textContent).toBe('Gun → Cy');
+    expect(screen.queryByTestId('reticle-p2')).toBeNull();
     await userEvent.click(screen.getByTestId('lock-in'));
+    expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'GUN', targets: ['p3'] }]);
+  });
+
+  it('cards go back to neutral on Cancel, on Esc, when another action is chosen, and once you lock in', async () => {
+    const { store } = inGame(3, 1);
+    mount(<Arena />, store);
+    const neutral = () => document.querySelectorAll('[data-targetable],[data-targeted]').length === 0;
+    expect(neutral()).toBe(true);
+    await userEvent.click(button('GUN'));
+    expect(neutral()).toBe(false);
+    await userEvent.click(screen.getByTestId('cancel-action'));
+    expect(neutral()).toBe(true);
+    await userEvent.click(button('GUN'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    await userEvent.keyboard('{Escape}');
+    expect(neutral()).toBe(true);
+    expect(screen.queryByTestId('confirm-drawer')).toBeNull();
+    await userEvent.click(button('GUN'));
+    await userEvent.click(button('DODGE')); // a non-attack needs no target
+    expect(neutral()).toBe(true);
+    await userEvent.click(button('GUN'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    await userEvent.click(screen.getByTestId('lock-in'));
+    expect(neutral()).toBe(true);
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'GUN', targets: ['p2'] }]);
+  });
+
+  it('only living opponents can be targeted: your own and eliminated cards are not clickable', async () => {
+    const game = withCharges(newGame(4), { p1: 1 });
+    const dead = { ...game, players: { ...game.players, p3: { ...game.players.p3!, alive: false } } };
+    const store = stubStore(clientStateFor(dead, 'p1'));
+    mount(<Arena />, store);
+    await userEvent.click(button('GUN'));
+    expect(screen.getByTestId('player-p2').getAttribute('data-targetable')).toBe('true');
+    expect(screen.getByTestId('player-p3').getAttribute('data-targetable')).toBeNull();
+    await userEvent.click(screen.getByTestId('player-p3'));
+    await userEvent.click(screen.getByTestId('player-p1'));
+    expect(screen.getByTestId('target-hint').textContent).toContain('Tap an opponent');
+  });
+
+  it('target cards can be reached and chosen with the keyboard (an overlay button per card)', async () => {
+    const { store } = inGame(3, 1);
+    mount(<Arena />, store);
+    await userEvent.click(button('GUN'));
+    act(() => screen.getByTestId('target-p3').focus());
+    await userEvent.keyboard('{Enter}');
+    expect(screen.getByTestId('confirm-choice').textContent).toBe('Gun → Cy');
+    expect(screen.getByTestId('target-p3').getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows a clear locked indicator afterwards and disables the whole panel', async () => {
@@ -243,15 +308,14 @@ describe('Control panel: choosing, targeting and locking in', () => {
     expect(screen.queryByTestId('lock-in')).toBeNull();
   });
 
-  it('a 3-player Katana may pick up to 3 targets but no more; toggling removes', async () => {
+  it('a Katana may pick up to 3 targets by tapping cards, but no more; tapping again removes', async () => {
     const { store } = inGame(5, 3);
-    mount(<ControlPanel />, store);
+    mount(<Arena />, store);
     await userEvent.click(button('KATANA'));
-    const picker = screen.getByTestId('target-picker');
-    expect(within(picker).getByText('Choose up to 3 targets for Katana')).toBeTruthy();
-    for (const n of ['Bo', 'Cy', 'Di', 'Ed']) await userEvent.click(within(picker).getByRole('button', { name: new RegExp(n) }));
+    expect(screen.getByTestId('target-hint').textContent).toContain('Tap up to 3 opponent cards');
+    for (const id of ['p2', 'p3', 'p4', 'p5']) await userEvent.click(screen.getByTestId(`player-${id}`));
     expect(screen.getByTestId('confirm-choice').textContent).toBe('Katana → Bo, Cy, Di'); // the 4th is refused
-    await userEvent.click(within(picker).getByRole('button', { name: /Cy/ }));
+    await userEvent.click(screen.getByTestId('player-p3'));
     expect(screen.getByTestId('confirm-choice').textContent).toBe('Katana → Bo, Di');
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'KATANA', targets: ['p2', 'p4'] }]);
@@ -259,9 +323,14 @@ describe('Control panel: choosing, targeting and locking in', () => {
 
   it('all-opponent weapons need no targets', async () => {
     const { store } = inGame(4, 4);
-    mount(<ControlPanel />, store);
+    mount(<Arena />, store);
     await userEvent.click(button('BOMB'));
     expect(screen.queryByTestId('target-picker')).toBeNull();
+    for (const id of ['p2', 'p3', 'p4']) {
+      expect(screen.getByTestId(`reticle-${id}`)).toBeTruthy(); // every opponent is hit
+      expect(screen.getByTestId(`player-${id}`).getAttribute('data-targetable')).toBeNull(); // nothing to choose
+    }
+    expect(screen.queryByTestId('reticle-p1')).toBeNull();
     expect(screen.getByText(/Hits every opponent: Bo, Cy, Di/)).toBeTruthy();
     await userEvent.click(screen.getByTestId('lock-in'));
     expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'BOMB', targets: [] }]);
@@ -366,10 +435,9 @@ describe('Keyboard: roving arrows, focus stability and optional shortcuts', () =
     act(() => button('SHIELD').focus());
     await userEvent.keyboard('{Enter}');
     expect(button('SHIELD').getAttribute('aria-pressed')).toBe('true');
-    await userEvent.keyboard('{Escape}');
-    // Escape handling is a Keyboard-mode shortcut; the explicit Cancel button always works:
-    await userEvent.click(screen.getByRole('button', { name: /Cancel/ }));
+    await userEvent.keyboard('{Escape}'); // Esc always resets the pick, with or without Keyboard mode
     expect(button('SHIELD').getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByTestId('confirm-drawer')).toBeNull();
   });
 
   it('single-key shortcuts do nothing until Keyboard mode is switched on', async () => {
@@ -384,7 +452,7 @@ describe('Keyboard: roving arrows, focus stability and optional shortcuts', () =
   it('with Keyboard mode on: C picks Charge, L locks in, Esc clears, digits toggle targets', async () => {
     localStorage.setItem('bng.keyboardMode', '1');
     const { store } = inGame(3, 1);
-    mount(<ControlPanel />, store);
+    mount(<Arena />, store);
 
     await userEvent.keyboard('c');
     expect(button('CHARGE').getAttribute('aria-pressed')).toBe('true');

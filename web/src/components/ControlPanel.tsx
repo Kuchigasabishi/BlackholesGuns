@@ -84,6 +84,9 @@ const ICON_SVG: Record<string, string> = {
   QUAD_REFLECT: shieldCheck,
 };
 
+/** Below the `lg` breakpoint the roster sits above the control panel (single column): the phone / small-tablet layout. */
+export const isStackedLayout = (): boolean => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
+
 const TIERS: readonly { readonly label: string; readonly cost: number; readonly ids: readonly AttackId[]; readonly reflect?: DefenseId }[] = [
   { label: 'TIER 1', cost: 1, ids: ['GUN', 'KNIFE'], reflect: 'REFLECT' },
   { label: 'TIER 2', cost: 2, ids: ['GATLING_GUN', 'FLAMETHROWER', 'AXE'], reflect: 'DOUBLE_REFLECT' },
@@ -242,7 +245,7 @@ function targetsReady(choice: Choice, opponents: readonly PlayerId[]): boolean {
 export function ControlPanel() {
   const state = useGameState();
   const store = useStore();
-  const { keyboardMode } = useSettings();
+  const { keyboardMode, reducedMotion } = useSettings();
   const { game, session, stage, ownCommit, lockedPlayerIds, turn } = state;
   const nameOf = nameLookup(state);
   const me = session && game ? game.players[session.playerId] : undefined;
@@ -274,7 +277,17 @@ export function ControlPanel() {
     setHint('');
   }, [turn?.turnId]);
 
-  const select = useCallback((choice: Choice) => store.dispatch({ type: 'selectChoice', choice }), [store]);
+  const select = useCallback(
+    (choice: Choice) => {
+      store.dispatch({ type: 'selectChoice', choice });
+      // On a phone the player cards are above the panel: after picking a weapon that needs a target, glide up to them
+      // (one scroll per pick, triggered by the tap itself, never by an effect, so it cannot loop).
+      if (choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode !== 'ALL_OPPONENTS' && opponents.length > 1 && isStackedLayout()) {
+        document.querySelector('[data-testid="roster"]')?.scrollIntoView?.({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+      }
+    },
+    [store, opponents.length, reducedMotion],
+  );
   const toggleTarget = useCallback((playerId: PlayerId) => store.dispatch({ type: 'toggleTarget', playerId }), [store]);
 
   const ready = selection !== null && targetsReady(selection.choice, opponents);
@@ -512,6 +525,9 @@ function FloatingLockIn({
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const anchor = anchorFor(choice);
+  // Choosing a target on a phone: the cards are scrolled into view, so this prompt rides along pinned to the bottom edge
+  // (the weapon button it normally hugs has scrolled away) and the weapon button must not be scrolled back into view.
+  const pickOnPhone = choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode !== 'ALL_OPPONENTS' && choice.targets.length === 0 && isStackedLayout();
 
   const place = useCallback(() => {
     const el = box.current;
@@ -521,7 +537,7 @@ function FloatingLockIn({
     const vh = window.innerHeight;
     const w = el.offsetWidth;
     const h = el.offsetHeight;
-    const target = document.querySelector(anchor.selector);
+    const target = pickOnPhone ? null : document.querySelector(anchor.selector);
     let top: number;
     let left: number;
     if (target) {
@@ -536,13 +552,14 @@ function FloatingLockIn({
     top = Math.max(margin, Math.min(top, vh - h - margin));
     left = Math.max(margin, Math.min(left, vw - w - margin));
     setPos((p) => (p && p.top === top && p.left === left ? p : { top, left }));
-  }, [anchor.selector]);
+  }, [anchor.selector, pickOnPhone]);
 
   // Bring the anchor into view first (phones scroll), then place; re-place after every render, on resize and on scroll.
   useLayoutEffect(() => {
+    if (pickOnPhone) return;
     const target = document.querySelector(anchor.selector) as (Element & { scrollIntoView?: (o?: ScrollIntoViewOptions) => void }) | null;
     target?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [anchor.selector]);
+  }, [anchor.selector, pickOnPhone]);
   useLayoutEffect(() => {
     place();
   });

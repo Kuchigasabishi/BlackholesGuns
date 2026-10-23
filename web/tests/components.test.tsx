@@ -1050,3 +1050,78 @@ describe('Host kick controls', () => {
     expect(store.getState().notice).toContain('removed you');
   });
 });
+
+describe('Phone auto-scroll to the player cards when a target is needed', () => {
+  const setViewport = (stacked: boolean) => {
+    Object.defineProperty(window, 'matchMedia', {
+      configurable: true,
+      value: (q: string) => ({ matches: stacked && q.includes('max-width: 1023px'), media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, onchange: null, dispatchEvent: () => false }),
+    });
+  };
+  afterEach(() => {
+    // @ts-expect-error restore the jsdom default (no matchMedia)
+    delete window.matchMedia;
+  });
+
+  it('on a phone, tapping a targeted weapon scrolls smoothly to the cards, once, and the prompt stays pinned in view', async () => {
+    setViewport(true);
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      const { store } = inGame(3, 1);
+      mount(<Arena />, store);
+      await userEvent.click(button('GUN'));
+      expect(scroll).toHaveBeenCalledTimes(1);
+      expect(scroll.mock.instances[0]).toBe(screen.getByTestId('roster'));
+      expect(scroll).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
+      const popup = screen.getByTestId('lockin-popup');
+      expect(popup.textContent).toContain('Tap an opponent');
+      expect(popup.style.position).toBe('fixed');
+      // choosing the target moves the prompt to that card and does not scroll again (no loop)
+      await userEvent.click(screen.getByTestId('player-p2'));
+      const smooth = () => scroll.mock.calls.filter((c) => c[0]?.behavior === 'smooth').length;
+      expect(smooth()).toBe(1); // (the popup only nudges the chosen card into view with `nearest`)
+      expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe('card:p2');
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('does not scroll on desktop, for non-targeted actions, or for area weapons', async () => {
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      setViewport(false);
+      const desktop = inGame(3, 4);
+      mount(<Arena />, desktop.store);
+      await userEvent.click(button('GUN'));
+      expect(scroll).not.toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+      cleanup();
+      scroll.mockClear();
+      setViewport(true);
+      mount(<Arena />, inGame(3, 4).store);
+      await userEvent.click(button('DODGE'));
+      await userEvent.click(button('BOMB'));
+      expect(scroll).not.toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('honours reduced motion with an instant jump', async () => {
+    localStorage.setItem('bng.reducedMotion', '1');
+    setViewport(true);
+    const scroll = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scroll;
+    try {
+      mount(<Arena />, inGame(3, 1).store);
+      await userEvent.click(button('GUN'));
+      expect(scroll).toHaveBeenCalledWith({ behavior: 'auto', block: 'start' });
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+});

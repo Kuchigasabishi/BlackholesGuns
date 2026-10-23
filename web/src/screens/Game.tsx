@@ -232,7 +232,7 @@ export function Roster() {
         Players
       </h2>
       <div className="relative" data-testid="arena">
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2" data-testid="roster">
+        <ul className="grid scroll-mt-4 grid-cols-1 gap-3 sm:grid-cols-2" data-testid="roster">
           {game.series.lobby.map((id, seat) => (
             <RosterCard key={id} id={id} seat={seat} state={state} />
           ))}

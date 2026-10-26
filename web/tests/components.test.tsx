@@ -713,8 +713,11 @@ describe('Match Results & Series Standings modal', () => {
     store.dispatch({ type: 'resolutionDismissed', turnId: store.getState().lastResult!.turnId }); // the turn popup was closed
     mount(<MatchResultsModal />, store);
     const user = userEvent.setup();
-    const dialog = screen.getByRole('dialog', { name: /MATCH RESULTS/ });
-    expect(within(dialog).getByTestId('mr-standings').textContent).toMatch(/1st: Ada.*4 Wins.*2nd: Bo.*2 Wins/);
+    const dialog = screen.getByRole('dialog', { name: /Match Results/ });
+    expect(within(dialog).getByTestId('mr-standings').textContent).toMatch(/01Ada.*MATCH WINNER.*4WINS.*02Bo.*2WINS/);
+    expect(within(dialog).getByTestId('mr-winner').textContent).toBe('Ada won the match!');
+    expect(within(dialog).getByTestId('mr-row-p1').querySelectorAll('[data-filled]')).toHaveLength(4);
+    expect(within(dialog).getByTestId('mr-row-p1').querySelectorAll('[aria-hidden] span')).toHaveLength(5); // one segment per win needed
     expect(within(dialog).getByTestId('mr-row-p1').getAttribute('data-match-winner')).toBe('true');
     expect(within(dialog).getByTestId('mr-leader-line').textContent).toContain('Ada is leading the series and needs 1 more win to win the series!');
     await user.click(within(dialog).getByTestId('mr-start'));

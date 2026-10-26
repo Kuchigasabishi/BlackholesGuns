@@ -111,7 +111,7 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     mount(<TurnResolutionModal />, store);
     expect(screen.queryByRole('dialog')).toBeNull();
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
-    const dialog = screen.getByRole('dialog', { name: 'TURN RESOLUTION' });
+    const dialog = screen.getByRole('dialog', { name: 'Turn Resolution' });
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(within(dialog).getByTestId('bf-p1').textContent).toContain('❔'); // the attacker is revealed after the lead-in
     advance(FX_TIMING.lead);
@@ -237,7 +237,8 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: attack('KNIFE', 'p1') });
     expect(screen.queryByTestId('tr-end')).toBeNull();
     advance(5000);
-    expect(screen.getByTestId('tr-end').textContent).toContain('Ada wins the match! (+1 Match Win)');
+    expect(screen.getByTestId('tr-end').textContent).toContain('Ada wins the match!');
+    expect(screen.getByTestId('tr-end').textContent).toContain('+1 Match Win');
     expect(screen.getByTestId('tr-next').textContent).toContain('Match results');
   });
 

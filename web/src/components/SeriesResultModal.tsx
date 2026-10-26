@@ -1,19 +1,24 @@
 import { useEffect, useRef } from 'react';
 import { trapTab } from '../a11y';
+import celebrationGrid from '../assets/modal/celebration-grid.svg';
+import championEmblem from '../assets/modal/champion-emblem.svg';
+import checkCircle from '../assets/modal/check-circle.svg';
 import { useFx } from '../fx/FxTimeline';
+import { rankStandings } from '../format/standings';
 import { useGameState, useStore } from '../hooks';
 import { nameLookup, turnModalOpen } from '../state/reducer';
+import { ModalShell, PrimaryAction, StandingRow } from './ModalShell';
 
 /**
- * The one remaining popup: the final series result, shown once the last turn's
- * in-line animation has settled. Per-turn results are shown on the player cards
- * themselves (see ArenaFX); this only closes out the whole series.
+ * "Series Over", the grand finale (from the Figma modal frame): the series champion up top, the final standings with one
+ * progress segment per win of the host's target, and a single "Return to lobby" action. It waits for the last turn's
+ * animation and popup, and everyone is routed back to the waiting lobby (scores are discarded with the finished game).
  */
 export function SeriesResultModal() {
   const store = useStore();
   const state = useGameState();
   const { stage } = useFx();
-  const { seriesEnd, game, lastResult } = state;
+  const { seriesEnd, game, lastResult, session } = state;
   const dialog = useRef<HTMLDivElement>(null);
   const primary = useRef<HTMLButtonElement>(null);
   const visible = seriesEnd !== null && game !== null && stage === 'settled' && !turnModalOpen(state);
@@ -25,8 +30,10 @@ export function SeriesResultModal() {
   if (!visible || !seriesEnd || !game) return null;
   const nameOf = nameLookup(state);
   const wins = seriesEnd.matchWins;
-  const ranked = [...game.series.lobby].sort((a, b) => (wins[b] ?? 0) - (wins[a] ?? 0));
+  const rows = rankStandings(game.series.lobby, wins);
+  const target = game.series.seriesWinTarget;
   const finalWinner = lastResult?.outcome.matchWinnerId ?? null;
+  const champion = seriesEnd.winnerId;
   const close = () => store.dispatch({ type: 'seriesAcknowledged' });
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
@@ -38,31 +45,54 @@ export function SeriesResultModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/85 p-2 sm:p-4" onKeyDown={onKeyDown}>
-      <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="sr-title" data-testid="series-result" className="neon-box flex max-h-[95vh] w-full max-w-lg flex-col rounded-2xl border-2 border-gold">
-        <div className="space-y-2 overflow-y-auto px-4 py-5 text-center sm:px-6">
-          {finalWinner && <p className="font-bold text-gold">🏆 {nameOf(finalWinner)} wins the final match (+1 Match Win)</p>}
-          <h2 id="sr-title" className="font-display text-2xl font-black text-gold">
-            SERIES OVER
-          </h2>
-          <p className="text-lg font-bold text-neon" data-testid="sr-winner">
-            {seriesEnd.winnerId ? nameOf(seriesEnd.winnerId) : 'Nobody'} wins the series!
-          </p>
-          <ol className="bracket mx-auto max-w-xs space-y-0.5 text-left text-sm" data-testid="sr-standings">
-            {ranked.map((id) => (
-              <li key={id} className="flex justify-between">
-                <span>{nameOf(id)}</span>
-                <span className="text-gold">{wins[id] ?? 0} match wins</span>
-              </li>
-            ))}
-          </ol>
+    <ModalShell
+      dialogRef={dialog}
+      testId="series-result"
+      titleId="sr-title"
+      tag="[ COMPLETE_ ]"
+      title="Series Over"
+      onKeyDown={onKeyDown}
+      footer={<PrimaryAction buttonRef={primary} label="Return to lobby" onClick={close} testId="sr-return" />}
+    >
+      {finalWinner && (
+        <div className="flex items-center gap-3 rounded-[4px] border border-[#243747] bg-[#070d16] px-4 py-[13px]">
+          <img src={checkCircle} alt="" aria-hidden="true" className="size-[18px] shrink-0" />
+          <p className="min-w-0 flex-1 font-inter text-[14px] text-[#eef6fa]">{nameOf(finalWinner)} wins the final match</p>
+          <p className="shrink-0 font-plex text-[12px] text-[#50e3ed]">+1 Match Win</p>
         </div>
-        <div className="flex justify-end border-t border-edge px-4 py-3 sm:px-6">
-          <button ref={primary} type="button" onClick={close} className="rounded-lg bg-neon px-6 py-2 font-bold text-void hover:brightness-110" data-testid="sr-return">
-            Return to lobby <span aria-hidden="true">→</span>
-          </button>
-        </div>
+      )}
+
+      <div className="relative flex flex-col items-center gap-3 overflow-hidden py-2 text-center">
+        <img src={celebrationGrid} alt="" aria-hidden="true" className="pointer-events-none absolute inset-x-[16%] top-[22%] w-[68%] max-w-none opacity-80" />
+        <span className="relative flex size-28 items-center justify-center" aria-hidden="true">
+          <img src={championEmblem} alt="" className="absolute -inset-[12.5%] size-[125%] max-w-none" />
+        </span>
+        <p className="relative font-plex text-[11px] leading-[1.4] text-[#50e3ed]">SERIES CHAMPION</p>
+        <p className="relative font-grotesk text-[clamp(28px,6vw,40px)] font-bold leading-tight text-[#eef6fa]" data-testid="sr-winner">
+          {champion ? nameOf(champion) : 'Nobody'} wins the series!
+        </p>
       </div>
-    </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="font-grotesk text-[21px] font-bold text-[#eef6fa]">Final standings</h3>
+        <p className="font-plex text-[11px] text-[#91a5b6]">SERIES TARGET REACHED</p>
+      </div>
+      <ol className="flex flex-col gap-[10px]" data-testid="sr-standings" aria-label={`Final standings, first to ${target} Match Wins`}>
+        {rows.map((r) => (
+          <StandingRow
+            key={r.playerId}
+            testId={`sr-row-${r.playerId}`}
+            rank={r.place}
+            name={nameOf(r.playerId)}
+            tag={r.playerId === champion ? 'SERIES WINNER' : undefined}
+            you={r.playerId === session?.playerId}
+            wins={r.wins}
+            target={target}
+            highlight={r.playerId === champion}
+            scoreLabel={r.wins === 1 ? 'MATCH WIN' : 'MATCH WINS'}
+          />
+        ))}
+      </ol>
+    </ModalShell>
   );
 }

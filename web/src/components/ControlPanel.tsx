@@ -20,6 +20,7 @@ import { useGameState, useSettings, useStore } from '../hooks';
 import type { Choice } from '../net/store';
 import { attackTip, reflectTip, type MatrixTip } from '../format/matrixTip';
 import { audio } from '../audio/AudioManager';
+import { INLINE_WEAPON_ICON } from './WeaponIcons';
 import axe from '../assets/ui/axe.svg';
 import battery from '../assets/ui/battery.svg';
 import bomb from '../assets/ui/bomb.svg';
@@ -214,7 +215,14 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
           selected ? 'bg-gold/15 ring-2 ring-gold' : '',
         ].join(' ')}
       >
-        <img src={ICON_SVG[id] ?? crosshair} alt="" aria-hidden="true" className={`size-[18px] shrink-0 ${enabled ? '' : 'opacity-50'}`} />
+        {INLINE_WEAPON_ICON[id] ? (
+          // Custom inline glyph: draws in currentColor so it follows the button text colour and the dimming below.
+          <span aria-hidden="true" className={`size-[18px] shrink-0 ${enabled ? 'text-[#eef6fa]' : 'text-[#91a5b6] opacity-50'}`}>
+            {INLINE_WEAPON_ICON[id]()}
+          </span>
+        ) : (
+          <img src={ICON_SVG[id] ?? crosshair} alt="" aria-hidden="true" className={`size-[18px] shrink-0 ${enabled ? '' : 'opacity-50'}`} />
+        )}
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className={`truncate font-inter text-[12px] font-semibold leading-tight ${enabled ? 'text-[#eef6fa]' : 'text-[#91a5b6]'}`}>{label}</span>
           <span className={`font-plex text-[9px] leading-none ${enabled ? 'text-[#50e3ed]' : 'text-[#546b7d]'}`}>

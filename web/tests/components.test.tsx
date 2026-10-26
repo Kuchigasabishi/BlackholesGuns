@@ -1201,3 +1201,25 @@ describe('Game Mode selector in the lobby', () => {
     expect((screen.getByTestId('series-target') as HTMLSelectElement).value).toBe('5');
   });
 });
+
+describe('Custom inline weapon icons', () => {
+  it('Grenade, Bomb (C4) and Mjolnir use inline currentColor SVGs; other weapons keep their image icons', () => {
+    mount(<ControlPanel />, inGame(2, 5).store);
+    for (const id of ['GRENADE', 'BOMB', 'MJOLNIR']) {
+      const svg = button(id).querySelector(`svg[data-weapon-icon="${id}"]`)!;
+      expect(svg, id).toBeTruthy();
+      expect(svg.getAttribute('viewBox')).toBe('0 0 24 24');
+      expect(svg.getAttribute('stroke')).toBe('currentColor');
+      expect(svg.outerHTML).not.toMatch(/#[0-9a-fA-F]{3,6}/); // no hard-coded colours: dimming and button colours apply
+      expect(button(id).querySelector('img')).toBeNull();
+    }
+    expect(button('GUN').querySelector('svg[data-weapon-icon]')).toBeNull();
+    expect(button('GUN').querySelector('img')).toBeTruthy();
+  });
+
+  it('dims with the button when unaffordable', () => {
+    mount(<ControlPanel />, inGame(2, 0).store);
+    const slot = button('MJOLNIR').querySelector('svg')!.parentElement!;
+    expect(slot.className).toContain('opacity-50');
+  });
+});

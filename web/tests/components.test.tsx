@@ -1125,3 +1125,48 @@ describe('Phone auto-scroll to the player cards when a target is needed', () => 
     }
   });
 });
+
+describe('Multi-target weapons: prompt under the card row, live Lock In label', () => {
+  it('does not sit on the first picked card; it is anchored to the whole roster and every opponent stays tappable', async () => {
+    const { store } = inGame(5, 3);
+    mount(<Arena />, store);
+    await userEvent.click(button('KATANA'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    expect(screen.getByTestId('lockin-popup').getAttribute('data-anchor')).toBe('roster');
+    for (const id of ['p3', 'p4', 'p5']) {
+      expect(screen.getByTestId(`player-${id}`).getAttribute('data-targetable')).toBe('true');
+      expect(screen.getByTestId(`player-${id}`).className).toContain('target-pulse'); // still glowing and clickable
+    }
+    expect(screen.getByTestId('player-p2').getAttribute('data-targeted')).toBe('true');
+  });
+
+  it('the button counts targets: 1 of 3, 2 of 3, then the full commitment label; the payload is exactly the chosen cards', async () => {
+    const { store } = inGame(5, 3);
+    mount(<Arena />, store);
+    await userEvent.click(button('KATANA'));
+    expect(screen.queryByTestId('lock-in')).toBeNull();
+    await userEvent.click(screen.getByTestId('player-p2'));
+    expect(screen.getByTestId('lock-in').textContent).toBe('Lock In (1 of 3 Targets)');
+    await userEvent.click(screen.getByTestId('player-p4'));
+    expect(screen.getByTestId('lock-in').textContent).toBe('Lock In (2 of 3 Targets)');
+    await userEvent.click(screen.getByTestId('player-p4')); // tap again removes
+    expect(screen.getByTestId('lock-in').textContent).toBe('Lock In (1 of 3 Targets)');
+    await userEvent.click(screen.getByTestId('player-p4'));
+    await userEvent.click(screen.getByTestId('player-p5'));
+    expect(screen.getByTestId('lock-in').textContent).toBe('Lock In (all 3 Targets)');
+    await userEvent.click(screen.getByTestId('lock-in'));
+    expect(store.commits).toEqual([{ kind: 'ATTACK', weapon: 'KATANA', targets: ['p2', 'p4', 'p5'] }]);
+  });
+
+  it('with fewer opponents than the limit, the allowance is the number of opponents; single-target weapons keep plain Lock In', async () => {
+    const { store } = inGame(3, 3);
+    mount(<Arena />, store);
+    await userEvent.click(button('KATANA'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    expect(screen.getByTestId('lock-in').textContent).toBe('Lock In (1 of 2 Targets)');
+    await userEvent.click(screen.getByTestId('cancel-action'));
+    await userEvent.click(button('GUN'));
+    await userEvent.click(screen.getByTestId('player-p2'));
+    expect(screen.getByTestId('lock-in').textContent).toBe('Lock In');
+  });
+});

@@ -492,6 +492,10 @@ export function ControlPanel() {
 
 /** Where the popup attaches: the last chosen target's card (targeted attacks) or the action's own button. */
 function anchorFor(choice: Choice): { selector: string; label: string } {
+  // Multi-target weapons: the prompt sits under the whole card row so no single card is covered and every opponent stays tappable.
+  if (choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode === 'UP_TO_THREE' && choice.targets.length > 0) {
+    return { selector: '[data-testid="roster"]', label: 'roster' };
+  }
   if (choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode !== 'ALL_OPPONENTS' && choice.targets.length > 0) {
     const id = choice.targets[choice.targets.length - 1]!;
     return { selector: `[data-card-id="${id}"]`, label: `card:${id}` };
@@ -543,7 +547,8 @@ function FloatingLockIn({
     if (target) {
       const r = target.getBoundingClientRect();
       top = r.bottom + margin;
-      if (top + h > vh - margin) top = r.top - h - margin; // no room below: float above
+      // No room below: a card-row prompt pins to the bottom edge (never over the cards); others float above their anchor.
+      if (top + h > vh - margin) top = anchor.label === 'roster' ? vh - h - margin : r.top - h - margin;
       left = r.left + r.width / 2 - w / 2;
     } else {
       top = vh - h - margin; // anchor missing: fall back to the bottom edge
@@ -584,6 +589,10 @@ function FloatingLockIn({
 
   const aimed = choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode !== 'ALL_OPPONENTS';
   const multi = choice.kind === 'ATTACK' && ATTACKS[choice.weapon].targetMode === 'UP_TO_THREE';
+  // Multi-target weapons say how many targets are chosen so far; the plain label returns once the allowance is full.
+  const maxTargets = Math.min(MULTI_TARGET_LIMIT, opponentCount);
+  const picked = choice.kind === 'ATTACK' ? choice.targets.length : 0;
+  const lockLabel = multi && picked > 0 ? (picked >= maxTargets ? `Lock In (all ${picked} Targets)` : `Lock In (${picked} of ${maxTargets} Targets)`) : 'Lock In';
   return (
     <div
       ref={box}
@@ -618,7 +627,7 @@ function FloatingLockIn({
             onClick={onLockIn}
             className={`flex-1 rounded-lg px-3 py-2.5 font-black ${ready ? 'bg-ok text-void hover:brightness-110' : 'cursor-not-allowed bg-ok/25 text-ink-dim'}`}
           >
-            Lock In
+            {lockLabel}
           </button>
         )}
         <button type="button" data-testid="cancel-action" onClick={onCancel} className="rounded-lg border border-edge px-3 py-2.5 text-sm text-ink-dim hover:text-ink">

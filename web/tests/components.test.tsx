@@ -1203,23 +1203,37 @@ describe('Game Mode selector in the lobby', () => {
 });
 
 describe('Custom inline weapon icons', () => {
-  it('Grenade, Bomb (C4) and Mjolnir use inline currentColor SVGs; other weapons keep their image icons', () => {
+  const INLINE = ['GUN', 'KNIFE', 'GRENADE', 'BOMB', 'MJOLNIR', 'REFLECT', 'DOUBLE_REFLECT', 'TRIPLE_REFLECT', 'QUAD_REFLECT'];
+
+  it('Gun, Knife, Grenade, C4, Mjolnir and the four Reflects use inline currentColor SVGs in one shared 24x24 box', () => {
     mount(<ControlPanel />, inGame(2, 5).store);
-    for (const id of ['GRENADE', 'BOMB', 'MJOLNIR']) {
+    for (const id of INLINE) {
       const svg = button(id).querySelector(`svg[data-weapon-icon="${id}"]`)!;
       expect(svg, id).toBeTruthy();
       expect(svg.getAttribute('viewBox')).toBe('0 0 24 24');
       expect(svg.getAttribute('stroke')).toBe('currentColor');
-      expect(svg.outerHTML).not.toMatch(/#[0-9a-fA-F]{3,6}/); // no hard-coded colours: dimming and button colours apply
+      expect(svg.outerHTML).not.toMatch(/#[0-9a-fA-F]{3,6}/); // no hard-coded colours: dimming and hover glow apply
       expect(button(id).querySelector('img')).toBeNull();
     }
-    expect(button('GUN').querySelector('svg[data-weapon-icon]')).toBeNull();
-    expect(button('GUN').querySelector('img')).toBeTruthy();
+    for (const id of ['GATLING_GUN', 'KATANA']) expect(button(id).querySelector('svg[data-weapon-icon]'), id).toBeNull();
   });
 
-  it('dims with the button when unaffordable', () => {
+  it('Reflect tiers stack 1, 2, 3 and 4 mirror frames, the front one carrying gloss lines', () => {
+    mount(<ControlPanel />, inGame(2, 5).store);
+    const mirrors = (id: string) => {
+      const svg = button(id).querySelector('svg')!;
+      return { frames: svg.querySelectorAll('rect').length + svg.querySelectorAll('path:not(:last-child)').length, backs: svg.querySelectorAll('path').length - 1 };
+    };
+    expect([1, 2, 3, 4].map((n, i) => mirrors(['REFLECT', 'DOUBLE_REFLECT', 'TRIPLE_REFLECT', 'QUAD_REFLECT'][i]!).backs + 1)).toEqual([1, 2, 3, 4]);
+    expect(button('QUAD_REFLECT').querySelectorAll('svg rect')).toHaveLength(1); // one full front frame, three layered behind it
+  });
+
+  it('dims with the button when unaffordable, and glows on hover/focus when affordable', () => {
     mount(<ControlPanel />, inGame(2, 0).store);
-    const slot = button('MJOLNIR').querySelector('svg')!.parentElement!;
-    expect(slot.className).toContain('opacity-50');
+    expect(button('MJOLNIR').querySelector('svg')!.parentElement!.className).toContain('opacity-50');
+    cleanup();
+    mount(<ControlPanel />, inGame(2, 5).store);
+    expect(button('GUN').className).toContain('group');
+    expect(button('GUN').querySelector('svg')!.parentElement!.className).toContain('group-hover:drop-shadow');
   });
 });

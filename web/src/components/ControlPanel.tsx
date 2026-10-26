@@ -204,7 +204,7 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
         }}
         className={[
           power ? `power-up power-t${power}` : '',
-          'flex h-[54px] w-full min-w-0 items-center gap-[9px] rounded-[4px] border px-3 text-left transition',
+          'group flex h-[54px] w-full min-w-0 items-center gap-[9px] rounded-[4px] border px-3 text-left transition',
           free
             ? enabled
               ? 'border-[#153744] bg-[#132e37] hover:brightness-125'
@@ -217,7 +217,7 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
       >
         {INLINE_WEAPON_ICON[id] ? (
           // Custom inline glyph: draws in currentColor so it follows the button text colour and the dimming below.
-          <span aria-hidden="true" className={`size-[18px] shrink-0 ${enabled ? 'text-[#eef6fa]' : 'text-[#91a5b6] opacity-50'}`}>
+          <span aria-hidden="true" className={`size-[18px] shrink-0 transition-[filter] ${enabled ? 'text-[#eef6fa] group-hover:text-[#50e3ed] group-hover:drop-shadow-[0_0_4px_currentColor] group-focus-visible:drop-shadow-[0_0_4px_currentColor]' : 'text-[#91a5b6] opacity-50'}`}>
             {INLINE_WEAPON_ICON[id]()}
           </span>
         ) : (

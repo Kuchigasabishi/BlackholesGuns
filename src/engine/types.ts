@@ -7,6 +7,7 @@
  * Those live on `Series` here, and `Match` carries the per-match fields.
  */
 import type { AttackId, DefenseId } from './catalog';
+import type { GameMode } from './constants';
 import type { MatrixResult } from './matrix';
 
 export type PlayerId = string;
@@ -34,6 +35,8 @@ export interface Series {
   readonly seriesWinTarget: number;
   /** Consecutive Match Wins per player (see `PlayerState.currentMatchStreak`); persists across matches. */
   readonly matchStreaks: Readonly<Record<PlayerId, number>>;
+  /** Resource paradigm for the whole series (see `GameMode`). Fixed once the series starts. */
+  readonly gameMode: GameMode;
   /** Players who quit mid-series. They are eliminated and sit out every later match. */
   readonly departed: readonly PlayerId[];
   /** Set once a player reaches the series win target. */

@@ -14,6 +14,9 @@ import {
   createSeededRng,
   createSeries,
   forfeitPlayers,
+  DEFAULT_GAME_MODE,
+  GAME_MODES,
+  type GameMode,
   SERIES_WIN_TARGET,
   SERIES_WIN_TARGET_OPTIONS,
   getActionAvailability,
@@ -189,6 +192,21 @@ export class Room {
 
   /** Match Wins needed to win the series. Host-editable only while in the lobby. */
   seriesWinTarget: number = SERIES_WIN_TARGET;
+  /** STANDARD (default) or SNOWBALL; host-editable only while in the lobby. */
+  gameMode: GameMode = DEFAULT_GAME_MODE;
+
+  setGameMode(playerId: PlayerId, mode: unknown): void {
+    if (this.status !== 'LOBBY') throw new RoomError('GAME_STARTED', 'The game mode is locked once the game starts');
+    if (playerId !== this.hostId) throw new RoomError('NOT_HOST', 'Only the host can change the game mode');
+    if (typeof mode !== 'string' || !(GAME_MODES as readonly string[]).includes(mode)) throw new RoomError('BAD_PAYLOAD', `Game mode must be one of ${GAME_MODES.join(', ')}`);
+    this.gameMode = mode as GameMode;
+    this.broadcastSettings();
+  }
+
+  private broadcastSettings(): void {
+    this.deps.emitter.toRoom(ServerEvents.roomSettingsUpdated, { gameMode: this.gameMode, seriesWinTarget: this.seriesWinTarget });
+    this.deps.emitter.toRoom(ServerEvents.lobbyUpdate, this.lobbyView());
+  }
 
   setSeriesWinTarget(playerId: PlayerId, target: unknown): void {
     if (this.status !== 'LOBBY') throw new RoomError('GAME_STARTED', 'The series target is locked once the game starts');
@@ -197,7 +215,7 @@ export class Room {
       throw new RoomError('BAD_PAYLOAD', `Series target must be one of ${SERIES_WIN_TARGET_OPTIONS.join(', ')}`);
     }
     this.seriesWinTarget = target;
-    this.deps.emitter.toRoom(ServerEvents.lobbyUpdate, this.lobbyView());
+    this.broadcastSettings();
   }
 
   lobbyView(): LobbyView {
@@ -209,6 +227,7 @@ export class Room {
       minPlayers: MIN_PLAYERS,
       maxPlayers: MAX_PLAYERS,
       seriesWinTarget: this.seriesWinTarget,
+      gameMode: this.gameMode,
       players: [...this.members.values()].map((m) => ({
         playerId: m.playerId,
         displayName: m.displayName,
@@ -380,6 +399,7 @@ export class Room {
       seriesId: `${this.code}-${randomBytes(3).toString('hex')}`,
       playerIds: [...this.members.keys()],
       seriesWinTarget: this.seriesWinTarget,
+      gameMode: this.gameMode,
     });
     for (const m of this.members.values()) {
       if (!m.connected) this.game = setConnectionStatus(this.game, m.playerId, 'DISCONNECTED');

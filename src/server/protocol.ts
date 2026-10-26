@@ -3,6 +3,7 @@ import type {
   ActionAvailability,
   AttackId,
   DefenseId,
+  GameMode,
   GameState,
   PlayerId,
   Phase,
@@ -23,6 +24,8 @@ export const ClientEvents = {
   abort: 'game:abort',
   /** Host only: evict a player (lobby or mid-game). Payload: { playerId }. */
   kick: 'player:kick',
+  /** Host only, lobby only: choose the Game Mode. Payload: { gameMode }. */
+  setGameMode: 'lobby:setGameMode',
   commit: 'action:commit',
 } as const;
 
@@ -45,6 +48,8 @@ export const ServerEvents = {
   seriesEnded: 'series:ended',
   /** The host aborted the series: everyone is back in the waiting lobby, scores discarded. */
   seriesAborted: 'series:aborted',
+  /** The host changed a room setting (game mode / series target): { gameMode, seriesWinTarget }. */
+  roomSettingsUpdated: 'room:settings_updated',
   /** A player quit mid-game and was eliminated (state arrives separately as state:sync). */
   playerQuit: 'player:quit',
   /** Sent only to the evicted player just before their socket is closed. */
@@ -83,6 +88,8 @@ export interface LobbyView {
   readonly maxPlayers: number;
   /** Match Wins needed to win the series; host-editable until the game starts. */
   readonly seriesWinTarget: number;
+  /** Resource paradigm: host-editable until the game starts. */
+  readonly gameMode: GameMode;
   readonly players: readonly { readonly playerId: PlayerId; readonly displayName: string; readonly connected: boolean }[];
 }
 

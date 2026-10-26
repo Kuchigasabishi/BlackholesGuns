@@ -36,7 +36,8 @@ export const defend = (player: PlayerId, defense: DefenseId): Spec => ({
 /** Seat ids p1..pN. */
 export const ids = (n: number): PlayerId[] => Array.from({ length: n }, (_, i) => `p${i + 1}`);
 
-export const newGame = (n = 2, seriesId = 's1'): GameState => createSeries({ seriesId, playerIds: ids(n) });
+/** Engine scenarios run in STANDARD mode explicitly (the original resource rules); SNOWBALL has its own tests. */
+export const newGame = (n = 2, seriesId = 's1', gameMode: 'STANDARD' | 'SNOWBALL' = 'STANDARD'): GameState => createSeries({ seriesId, playerIds: ids(n), gameMode });
 
 /** Stamps the open turn's ids onto a choice, producing an engine Action. */
 export function makeAction(state: GameState, player: PlayerId, choice: Choice, acceptedAt = 0): Action {

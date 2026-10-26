@@ -30,6 +30,7 @@ export function lobbyView(n: number, opts: { hostId?: PlayerId | null; status?: 
     minPlayers: 2,
     maxPlayers: 8,
     seriesWinTarget: 10,
+    gameMode: 'STANDARD',
     players: ids(n).map((id, i) => ({ playerId: id, displayName: NAMES[i]!, connected: !(opts.offline ?? []).includes(id) })),
   };
 }
@@ -119,6 +120,7 @@ export interface StubStore extends GameStore {
   readonly commits: unknown[];
   readonly started: number;
   readonly aborted: number;
+  readonly modes: string[];
   readonly kicks: string[];
   readonly targets: number[];
   set(state: ClientState): void;
@@ -134,6 +136,7 @@ export function stubStore(initial: ClientState = initialState): StubStore {
   const commits: unknown[] = [];
   let started = 0;
   let aborted = 0;
+  const modes: string[] = [];
   const kicks: string[] = [];
   const targets: number[] = [];
   const store: StubStore = {
@@ -144,6 +147,11 @@ export function stubStore(initial: ClientState = initialState): StubStore {
       return started;
     },
     kicks,
+    modes,
+    async setGameMode(mode: string) {
+      modes.push(mode);
+      return true;
+    },
     async kickPlayer(playerId: string) {
       kicks.push(playerId);
       return true;

@@ -176,6 +176,12 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     return {};
   });
 
+  const onSetGameMode = handle((payload, socket) => {
+    const { room, playerId } = requireBinding(socket);
+    room.setGameMode(playerId, (payload as { gameMode?: unknown } | null)?.gameMode);
+    return {};
+  });
+
   const onKick = handle((payload, socket) => {
     const { room, playerId } = requireBinding(socket);
     room.kick(playerId, (payload as { playerId?: unknown } | null)?.playerId);
@@ -205,6 +211,7 @@ export function createGameServer(options: GameServerOptions = {}): GameServer {
     socket.on(ClientEvents.setSeriesTarget, onSetSeriesTarget(socket));
     socket.on(ClientEvents.abort, onAbort(socket));
     socket.on(ClientEvents.kick, onKick(socket));
+    socket.on(ClientEvents.setGameMode, onSetGameMode(socket));
     socket.on(ClientEvents.leave, onLeave(socket));
     socket.on(ClientEvents.commit, onCommit(socket));
     socket.on('disconnect', () => {

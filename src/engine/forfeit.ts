@@ -63,7 +63,8 @@ export function forfeitPlayers(state: GameState, ids: readonly PlayerId[]): Forf
     startRound({ series: { ...series, matchStreaks }, matchIndex: state.match.matchIndex + 1, roundIndex: 1, aliveIds: participants, matchWins, connection });
 
   if (survivors.length >= 2) {
-    const next = startRound({ series, matchIndex: state.match.matchIndex, roundIndex: state.match.roundIndex + 1, aliveIds: survivors, matchWins: series.matchWins, connection });
+    const carried = series.gameMode === 'SNOWBALL' ? Object.fromEntries(survivors.map((id) => [id, state.players[id]!.charge])) : undefined;
+    const next = startRound({ series, matchIndex: state.match.matchIndex, roundIndex: state.match.roundIndex + 1, aliveIds: survivors, matchWins: series.matchWins, connection, ...(carried ? { charges: carried } : {}) });
     return { state: next, transition: 'NEXT_ROUND', matchWinnerId: null, seriesWinnerId: null, eliminatedIds };
   }
 

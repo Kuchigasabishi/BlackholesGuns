@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SERIES_WIN_TARGET, SERIES_WIN_TARGET_OPTIONS } from '../../../src/engine';
+import { GAME_MODES, SERIES_WIN_TARGET, SERIES_WIN_TARGET_OPTIONS, type GameMode } from '../../../src/engine';
 import chevronDown from '../assets/ui/chevron-down.svg';
 import copyIcon from '../assets/ui/copy.svg';
 import info from '../assets/ui/info.svg';
@@ -18,6 +18,12 @@ import { NoticeBar } from './Game';
 import { useGameState, useStore } from '../hooks';
 
 const SLOTS = 8;
+
+/** Display names and one-line rules for the two resource paradigms. */
+export const MODE_INFO: Record<GameMode, { name: string; blurb: string }> = {
+  STANDARD: { name: 'Standard Mode', blurb: 'Tactical pacing. Survivors reset to 0 Charge on elimination.' },
+  SNOWBALL: { name: 'Snowball Mode', blurb: 'Aggressive pacing. Survivors retain accumulated charges mid-match.' },
+};
 
 /**
  * The waiting room, from the Figma "Waiting room" frame: room code + invite link on the left, the 8-slot roster,
@@ -196,6 +202,37 @@ export function LobbyScreen() {
                 <span className="bracket font-bold">[ERROR]</span> {error}
               </p>
             )}
+
+            <section className="flex flex-col gap-4 rounded-lg border border-[#243747] bg-[#0c1420] p-6" aria-labelledby="mode-h">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label id="mode-h" htmlFor="game-mode" className="font-grotesk text-[20px] font-bold text-[#eef6fa]">
+                  Game Mode
+                </label>
+                <div className="relative">
+                  <select
+                    id="game-mode"
+                    data-testid="game-mode"
+                    value={lobby.gameMode}
+                    disabled={!isHost}
+                    title={MODE_INFO[lobby.gameMode].blurb}
+                    aria-describedby="mode-blurb"
+                    onChange={(e) => void store.setGameMode(e.target.value as GameMode)}
+                    className="h-[42px] min-w-[11rem] appearance-none rounded-[4px] border border-[#243747] bg-[#070d16] pl-[14px] pr-10 font-plex text-[12px] text-[#eef6fa] disabled:opacity-60"
+                  >
+                    {GAME_MODES.map((m) => (
+                      <option key={m} value={m} title={MODE_INFO[m].blurb}>
+                        {MODE_INFO[m].name}
+                      </option>
+                    ))}
+                  </select>
+                  <img src={chevronDown} alt="" aria-hidden="true" className="pointer-events-none absolute right-[14px] top-1/2 size-[14px] -translate-y-1/2" />
+                </div>
+              </div>
+              <p id="mode-blurb" data-testid="game-mode-blurb" className="font-inter text-[12px] leading-[1.6] text-[#91a5b6]">
+                {MODE_INFO[lobby.gameMode].blurb}
+                {!isHost && ' (Set by the host.)'}
+              </p>
+            </section>
 
             <section className="flex flex-col gap-4 rounded-lg border border-[#243747] bg-[#0c1420] p-6" aria-labelledby="target-h">
               <div className="flex flex-wrap items-center justify-between gap-3">

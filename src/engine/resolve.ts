@@ -247,6 +247,10 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
 
   const nextRoundIndex = state.match.roundIndex + 1;
 
+  // STANDARD: an elimination clears every surviving Charge (the new round starts at 0). SNOWBALL: survivors carry their
+  // post-turn Charge forward; it is only cleared when a fresh match starts (which never passes `charges`).
+  const carried = state.series.gameMode === 'SNOWBALL' ? Object.fromEntries(playerResults.map((x) => [x.playerId, x.chargeAfter])) : undefined;
+
   if (survivorIds.length === 0) {
     const restarted = startRound({
       series: state.series,
@@ -255,6 +259,7 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
       aliveIds: living,
       matchWins: state.series.matchWins,
       connection,
+      ...(carried ? { charges: carried } : {}),
     });
     return finish(restarted, 'ROUND_RESTARTED_NO_SURVIVORS', null, null);
   }
@@ -267,6 +272,7 @@ export function resolveTurn(state: GameState, lockedActions: Readonly<Record<Pla
       aliveIds: survivorIds,
       matchWins: state.series.matchWins,
       connection,
+      ...(carried ? { charges: carried } : {}),
     });
     return finish(nextRound, 'NEXT_ROUND', null, null);
   }

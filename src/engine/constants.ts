@@ -12,6 +12,11 @@ export const MAX_CHARGE = 5;
 
 /** §2: the first player to this many Match Wins wins the series. */
 export const SERIES_WIN_TARGET = 10;
+/** Resource paradigm: STANDARD survivors reset to 0 Charge on an elimination; SNOWBALL survivors keep it (cleared only at a new match). */
+export const GAME_MODES = ['STANDARD', 'SNOWBALL'] as const;
+export type GameMode = (typeof GAME_MODES)[number];
+export const DEFAULT_GAME_MODE: GameMode = 'STANDARD';
+
 /** The host-selectable series targets; `SERIES_WIN_TARGET` is the default. */
 export const SERIES_WIN_TARGET_OPTIONS = [3, 5, 10] as const;
 

@@ -1170,3 +1170,34 @@ describe('Multi-target weapons: prompt under the card row, live Lock In label', 
     expect(screen.getByTestId('lock-in').textContent).toBe('Lock In');
   });
 });
+
+describe('Game Mode selector in the lobby', () => {
+  const lobbyAs = (me: string) => {
+    let s = reducer(initialState, { type: 'connection', status: 'connected' });
+    s = reducer(s, { type: 'session', session: { roomCode: 'K7M2QP', playerId: me, playerToken: 't' } });
+    s = reducer(s, { type: 'lobby', lobby: lobbyView(2, { hostId: 'p1' }) });
+    return stubStore(s);
+  };
+
+  it('the host picks Standard or Snowball, with the matching one-line rule shown', async () => {
+    const store = lobbyAs('p1');
+    mount(<LobbyScreen />, store);
+    const select = screen.getByTestId('game-mode') as HTMLSelectElement;
+    expect(select.value).toBe('STANDARD');
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Standard Mode', 'Snowball Mode']);
+    expect(screen.getByTestId('game-mode-blurb').textContent).toContain('Tactical pacing. Survivors reset to 0 Charge on elimination.');
+    await userEvent.selectOptions(select, 'SNOWBALL');
+    expect(store.modes).toEqual(['SNOWBALL']);
+  });
+
+  it('guests see it disabled; a room:settings_updated broadcast updates the view, text and tooltip', () => {
+    const store = lobbyAs('p2');
+    mount(<LobbyScreen />, store);
+    expect((screen.getByTestId('game-mode') as HTMLSelectElement).disabled).toBe(true);
+    act(() => store.dispatch({ type: 'roomSettings', gameMode: 'SNOWBALL', seriesWinTarget: 5 }));
+    expect((screen.getByTestId('game-mode') as HTMLSelectElement).value).toBe('SNOWBALL');
+    expect(screen.getByTestId('game-mode-blurb').textContent).toContain('Aggressive pacing. Survivors retain accumulated charges mid-match.');
+    expect(screen.getByTestId('game-mode').getAttribute('title')).toContain('Aggressive pacing');
+    expect((screen.getByTestId('series-target') as HTMLSelectElement).value).toBe('5');
+  });
+});

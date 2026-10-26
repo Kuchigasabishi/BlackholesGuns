@@ -4,7 +4,7 @@
  * useSyncExternalStore and tests can drive it against a real server in Node.
  */
 import { io, type Socket } from 'socket.io-client';
-import type { AttackId, DefenseId, PlayerId } from '../../../src/engine';
+import type { AttackId, DefenseId, GameMode, PlayerId } from '../../../src/engine';
 import {
   ClientEvents,
   ServerEvents,
@@ -43,6 +43,8 @@ export interface GameStore {
   createRoom(displayName: string): Promise<boolean>;
   joinRoom(roomCodeOrLink: string, displayName: string): Promise<boolean>;
   setSeriesTarget(target: number): Promise<boolean>;
+  /** Host only, lobby only: STANDARD or SNOWBALL. */
+  setGameMode(mode: GameMode): Promise<boolean>;
   /** Host only, mid-game: abort the series and send everyone back to the lobby. */
   abortSeries(): Promise<boolean>;
   /** Host only: evict a player (lobby or mid-game). */
@@ -147,6 +149,7 @@ export function createGameStore(options: StoreOptions = {}): GameStore {
   socket.on(ServerEvents.stateSync, (p) => dispatch({ type: 'stateSync', state: p.state }));
   socket.on(ServerEvents.playerConnection, (p) => dispatch({ type: 'playerConnection', playerId: p.playerId, status: p.status }));
   socket.on(ServerEvents.seriesEnded, (p) => dispatch({ type: 'seriesEnded', winnerId: p.winnerId, matchWins: p.matchWins }));
+  socket.on(ServerEvents.roomSettingsUpdated, (p) => dispatch({ type: 'roomSettings', gameMode: p.gameMode, seriesWinTarget: p.seriesWinTarget }));
   socket.on(ServerEvents.seriesAborted, () => dispatch({ type: 'seriesAborted', notice: 'The host returned everyone to the lobby.' }));
   socket.on(ServerEvents.playerQuit, (p) => {
     if (p.playerId !== state.session?.playerId) dispatch({ type: 'notice', message: p.kicked ? `${p.displayName} was removed by the host and eliminated.` : `${p.displayName} left the match and was eliminated.` });
@@ -196,6 +199,12 @@ export function createGameStore(options: StoreOptions = {}): GameStore {
     async joinRoom(roomCodeOrLink, displayName) {
       dispatch({ type: 'error', message: null });
       return enterRoom(await request(ClientEvents.join, { roomCode: roomCodeOrLink, displayName }));
+    },
+
+    async setGameMode(mode) {
+      const ack = await request(ClientEvents.setGameMode, { gameMode: mode });
+      if (!ack.ok) dispatch({ type: 'error', message: messageFor(ack.code, ack.message) });
+      return ack.ok;
     },
 
     async setSeriesTarget(target) {

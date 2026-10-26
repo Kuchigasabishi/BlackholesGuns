@@ -38,6 +38,7 @@ Every turn is a **simultaneous, hidden-information** decision:
 | **6 defenses** | Dodge and Shield (free); Reflect, Double, Triple and Quad Reflect (1-4 Charge). |
 | **12x6 interaction matrix** | Every attack/defense pair resolves to *block*, *eliminate* or *reflect* (the attacker is eliminated). |
 | **Attack vs. attack** | Only between two players attacking *each other* (rules v1.1): higher tier wins; at equal tier, ranged beats melee; equal tier and class cancel out; Blackhole beats every attack except another Blackhole. An attacker hit by someone it is *not* attacking has no defense and is eliminated. |
+| **Game mode** | Host-selected in the lobby. **Standard** (default): survivors reset to 0 Charge when someone is eliminated. **Snowball**: survivors keep their Charge through eliminations; it is only cleared when a new match starts. |
 | **Stalemate breakers** | After 10 turns with no elimination (two players left): **Sudden Death**, where defenses are disabled and attacking is mandatory when affordable. After 15: **Overtime**, where normal rules return. There is no draw state. |
 | **Structure** | Round, then match (+1 Match Win), then series (first to 10 Match Wins). |
 

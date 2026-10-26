@@ -2,7 +2,7 @@
  * Pure client state. The server is authoritative; this only mirrors what the
  * server has told THIS player (public state plus their own private view).
  */
-import { ATTACKS, MULTI_TARGET_LIMIT, type ActionAvailability, type GameState, type Phase, type PlayerId } from '../../../src/engine';
+import { ATTACKS, MULTI_TARGET_LIMIT, type ActionAvailability, type GameMode, type GameState, type Phase, type PlayerId } from '../../../src/engine';
 import type { Choice } from '../net/store';
 import type {
   ActionPayload,
@@ -95,6 +95,7 @@ export type ClientAction =
   | { type: 'committed'; turnId: string; action: ActionPayload }
   | { type: 'roomClosed' }
   | { type: 'kicked' }
+  | { type: 'roomSettings'; gameMode: GameMode; seriesWinTarget: number }
   | { type: 'error'; message: string | null }
   | { type: 'notice'; message: string | null }
   | { type: 'dismissPhaseNotice' }
@@ -318,6 +319,9 @@ export function reducer(state: ClientState, action: ClientAction): ClientState {
               : state.lockedPlayerIds,
           }
         : state;
+
+    case 'roomSettings':
+      return state.lobby ? { ...state, lobby: { ...state.lobby, gameMode: action.gameMode, seriesWinTarget: action.seriesWinTarget } } : state;
 
     case 'kicked':
       return { ...initialState, connection: state.connection, notice: 'The host removed you from the room.' };

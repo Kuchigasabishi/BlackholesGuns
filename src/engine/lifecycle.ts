@@ -1,4 +1,5 @@
 /** Construction of series / match / round / turn state (§2, §15). */
+import { DEFAULT_GAME_MODE, GAME_MODES, type GameMode } from './constants';
 import { MATRIX_VERSION, MAX_PLAYERS, MIN_PLAYERS, RULES_VERSION, SERIES_WIN_TARGET, SERIES_WIN_TARGET_OPTIONS } from './constants';
 import { EngineError } from './errors';
 import { deepFreeze } from './freeze';
@@ -48,6 +49,8 @@ export interface RoundStart {
   readonly aliveIds: readonly PlayerId[];
   readonly matchWins: Readonly<Record<PlayerId, number>>;
   readonly connection: Readonly<Record<PlayerId, ConnectionStatus>>;
+  /** Charges carried into the new round (SNOWBALL survivors). Omitted = everyone starts at 0 (§15). */
+  readonly charges?: Readonly<Record<PlayerId, number>>;
 }
 
 /**
@@ -57,7 +60,7 @@ export interface RoundStart {
  * lobby as `aliveIds`).
  */
 export function startRound(start: RoundStart): GameState {
-  const { series: base, matchIndex, roundIndex, aliveIds, matchWins, connection } = start;
+  const { series: base, matchIndex, roundIndex, aliveIds, matchWins, connection, charges } = start;
   const matchId = matchIdOf(base.seriesId, matchIndex);
   const roundId = roundIdOf(matchId, roundIndex);
   const alive = new Set(aliveIds);
@@ -96,7 +99,7 @@ export function startRound(start: RoundStart): GameState {
     players[playerId] = {
       playerId,
       alive: alive.has(playerId),
-      charge: 0,
+      charge: alive.has(playerId) ? (charges?.[playerId] ?? 0) : 0,
       matchWins: matchWins[playerId] ?? 0,
       currentMatchStreak: base.matchStreaks[playerId] ?? 0,
       connectionStatus: connection[playerId] ?? 'CONNECTED',
@@ -112,11 +115,14 @@ export interface CreateSeriesConfig {
   readonly playerIds: readonly PlayerId[];
   /** Match Wins needed to win the series; defaults to `SERIES_WIN_TARGET`. */
   readonly seriesWinTarget?: number;
+  /** Resource paradigm; defaults to STANDARD. */
+  readonly gameMode?: GameMode;
 }
 
 /** §2: begins a series with the full lobby alive, first round at 0 Charge, Normal Phase. */
 export function createSeries(config: CreateSeriesConfig): GameState {
-  const { seriesId, playerIds, seriesWinTarget = SERIES_WIN_TARGET } = config;
+  const { seriesId, playerIds, seriesWinTarget = SERIES_WIN_TARGET, gameMode = DEFAULT_GAME_MODE } = config;
+  if (!(GAME_MODES as readonly string[]).includes(gameMode)) throw new EngineError('INVALID_LOBBY', `Unknown game mode ${String(gameMode)}`);
   if (!(SERIES_WIN_TARGET_OPTIONS as readonly number[]).includes(seriesWinTarget)) {
     throw new EngineError('INVALID_LOBBY', `Series win target must be one of ${SERIES_WIN_TARGET_OPTIONS.join(', ')}, got ${seriesWinTarget}`);
   }
@@ -138,6 +144,7 @@ export function createSeries(config: CreateSeriesConfig): GameState {
     status: 'IN_PROGRESS',
     matchWins,
     seriesWinTarget,
+    gameMode,
     matchStreaks: Object.fromEntries(playerIds.map((id) => [id, 0])),
     departed: [],
     currentMatchId: matchIdOf(seriesId, 1),

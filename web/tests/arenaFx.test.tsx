@@ -4,6 +4,8 @@ import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SeriesResultModal } from '../src/components/SeriesResultModal';
 import { TurnResolutionModal } from '../src/components/TurnResolutionModal';
+import { readFileSync } from 'node:fs';
+import { flyerMotion } from '../src/components/ArenaFX';
 import { FX_TIMING, buildSchedule, planTurn, reactionsAt, shakeTierAt } from '../src/format/fxPlan';
 import { FxTimelineProvider } from '../src/fx/FxTimeline';
 import { SettingsProvider, StoreProvider } from '../src/hooks';
@@ -133,7 +135,7 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     expect(card('p3').getAttribute('data-revealed')).toBe('true');
     expect(card('p1').getAttribute('data-revealed')).toBe('false'); // the attacker is still face-down
     expect(card('p1').textContent).toContain('❔');
-    expect(card('p3').querySelector('[data-testid="bf-action"]')!.className).toContain('anim-fx-charge'); // pulsing Charge
+    expect(card('p3').querySelector('[data-glyph="CHARGE"]')!.className).toContain('fx-gather'); // breathing Charge
     expect(screen.queryByTestId('fx-projectile')).toBeNull();
     expect(screen.getByTestId('turn-resolution').getAttribute('data-shake')).toBeNull();
 
@@ -312,5 +314,98 @@ describe('Figma vector icons replace the Charge / Dodge / Shield / Gun / Knife /
       expect(paints.length).toBeGreaterThan(0);
       expect(paints.every((v) => v === 'currentColor' || v!.startsWith('var(--icon-cut'))).toBe(true);
     }
+  });
+});
+
+describe('Icon combat choreography (CSS keyframes on the Figma icons)', () => {
+  const glyph = (card: string, name: string) => screen.getByTestId(card).querySelector(`[data-glyph="${name}"]`)!;
+  const impact = FX_TIMING.lead + FX_TIMING.flight;
+
+  it('Charge breathes from the start; a Shield springs up exactly at the impact tick while the bullet flies at it', () => {
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
+    expect(glyph('bf-p3', 'CHARGE').getAttribute('data-fx')).toBe('gather');
+    expect(glyph('bf-p2', 'SHIELD').getAttribute('data-fx')).toBeNull(); // armed, waiting for the weapon
+    advance(FX_TIMING.lead);
+    const shot = screen.getByTestId('fx-projectile');
+    expect(shot.getAttribute('data-motion')).toBe('fx-bullet-blocked');
+    expect(shot.className).toContain('fx-bullet-blocked');
+    advance(FX_TIMING.flight - 1);
+    expect(glyph('bf-p2', 'SHIELD').getAttribute('data-fx')).toBeNull();
+    advance(1);
+    expect(glyph('bf-p2', 'SHIELD').getAttribute('data-fx')).toBe('activate');
+    expect(glyph('bf-p2', 'SHIELD').className).toContain('fx-activate');
+  });
+
+  it('a Dodge slides away from the attacker at impact', () => {
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('DODGE'), p3: CHARGE });
+    expect(glyph('bf-p2', 'DODGE').getAttribute('data-fx')).toBeNull();
+    advance(impact);
+    const dodge = glyph('bf-p2', 'DODGE') as HTMLElement;
+    expect(dodge.getAttribute('data-fx')).toBe('avoid');
+    expect(dodge.style.getPropertyValue('--dir')).toBe('1'); // the attacker's card is to the left, so it slides right
+  });
+
+  it('a successful Reflect flips the mirror and streaks a particle back when the weapon lands', () => {
+    const game = withCharges(three(), { p2: 1 });
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('REFLECT'), p3: CHARGE });
+    advance(FX_TIMING.lead);
+    expect(screen.getByTestId('fx-projectile').getAttribute('data-motion')).toBe('fx-bullet-reflected');
+    advance(FX_TIMING.flight * 1.7);
+    const mirror = glyph('bf-p2', 'REFLECT');
+    expect(mirror.getAttribute('data-fx')).toBe('reflect');
+    expect(mirror.className).toContain('fx-reflect');
+    expect(mirror.querySelector('.fx-reflect-bounce')).toBeTruthy();
+  });
+
+  it('a Knife attack dashes and slashes (meleeStrike) while a Gun fires a bullet', () => {
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: attack('KNIFE', 'p2'), p2: CHARGE, p3: attack('GUN', 'p2') });
+    advance(FX_TIMING.lead);
+    const motions = screen.getAllByTestId('fx-projectile').map((x) => x.getAttribute('data-motion'));
+    expect(motions).toContain('fx-melee');
+  });
+
+  it('the victim shakes for 300 ms at impact; reduced motion plays none of it', () => {
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: attack('GUN', 'p2'), p2: CHARGE, p3: CHARGE });
+    advance(impact);
+    expect(screen.getByTestId('bf-p2').className).toContain('anim-fx-hit');
+    cleanup();
+    localStorage.setItem('bng.reducedMotion', '1');
+    const store2 = liveStore(game);
+    mount(<TurnResolutionModal />, store2);
+    deliver(store2, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
+    expect(glyph('bf-p2', 'SHIELD').getAttribute('data-fx')).toBeNull();
+    expect(glyph('bf-p2', 'SHIELD').getAttribute('data-lit')).toBe('true');
+    expect(screen.queryByTestId('fx-projectile')).toBeNull();
+  });
+
+  it('flyerMotion scales each animation to land on its impact tick', () => {
+    expect(flyerMotion({ end: 'HIT', emoji: '🔫' })).toEqual({ cls: 'fx-bullet', duration: FX_TIMING.flight * 1.15 });
+    expect(flyerMotion({ end: 'HIT', emoji: '🔪' }).cls).toBe('fx-melee');
+    expect(flyerMotion({ end: 'REFLECTED', emoji: '🔫' }).cls).toBe('fx-bullet-reflected');
+    expect(flyerMotion({ end: 'NEUTRALIZED', emoji: '🔪' }).cls).toBe('fx-bullet-clash');
+    const melee = flyerMotion({ end: 'HIT', emoji: '🔪' });
+    expect(melee.duration * 0.6).toBeCloseTo(FX_TIMING.flight, -1); // the slash frame (60%) is the impact tick
+  });
+
+  it('the stylesheet defines the six keyframes with translate3d / scale3d only, and disables them for reduced motion', () => {
+    const css = readFileSync('web/src/index.css', 'utf8');
+    for (const k of ['fireBullet', 'meleeStrike', 'activateDefenses', 'reflectBounce', 'gatherEnergy', 'avoidManeuver']) expect(css).toContain(`@keyframes ${k} {`);
+    const section = css.slice(css.indexOf('/* A hit: 300 ms shake'), css.indexOf('/* Tier power-up glow'));
+    expect(section).not.toMatch(/translate\(|scale\(|translateX|translateY/); // only the 3d forms (compositor-friendly)
+    expect(css).toMatch(/prefers-reduced-motion: reduce[\s\S]*animation: none !important/);
   });
 });

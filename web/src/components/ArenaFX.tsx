@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { useLayoutEffect, useRef, type CSSProperties, type RefObject } from 'react';
 import { FX_TIMING, type Projectile } from '../format/fxPlan';
 import { useFx } from '../fx/FxTimeline';
 import { ActionGlyph } from './ActionIcons';
@@ -18,64 +18,29 @@ function centreOf(container: HTMLElement, playerId: string): Point | null {
 }
 
 /**
- * Keyframes (as offsets from the source card centre) for how a projectile ends.
- * `d` is the vector from the attacker's card to the target's card.
+ * Which CSS keyframes (index.css) a projectile uses and how long they run. The durations are scaled so the impact
+ * frame of each animation lands on the schedule's impact tick (launch + flight): a Knife is a melee dash-and-slash
+ * (`meleeStrike`) that snaps back to the attacker, every other weapon flies as a bullet (`fireBullet*`).
  */
-function keyframesFor(p: Projectile, d: Point): { frames: Keyframe[]; duration: number } {
-  const at = (k: number): Keyframe => ({ transform: `translate(-50%, -50%) translate(${d.x * k}px, ${d.y * k}px)` });
+export function flyerMotion(p: Pick<Projectile, 'end' | 'emoji'>): { cls: string; duration: number } {
+  const f = FX_TIMING.flight;
+  if (p.emoji === '🔪' && (p.end === 'HIT' || p.end === 'BLOCKED')) return { cls: 'fx-melee', duration: Math.round(f / 0.6) };
   switch (p.end) {
     case 'BLOCKED':
-      // Fly in, smack into the defense and ricochet off it.
-      return {
-        duration: FX_TIMING.flight * 1.5,
-        frames: [
-          { ...at(0), opacity: 0, offset: 0 },
-          { ...at(0.08), opacity: 1, offset: 0.08 },
-          { ...at(0.84), opacity: 1, offset: 0.62 },
-          { transform: `translate(-50%, -50%) translate(${d.x * 0.7 + 18}px, ${d.y * 0.7 - 46}px) rotate(220deg) scale(0.8)`, opacity: 0, offset: 1 },
-        ],
-      };
+      return { cls: 'fx-bullet-blocked', duration: f * 1.5 };
     case 'REFLECTED':
-      // Fly in, bounce straight back at the attacker.
-      return {
-        duration: FX_TIMING.flight * 1.9,
-        frames: [
-          { ...at(0), opacity: 0, offset: 0 },
-          { ...at(0.08), opacity: 1, offset: 0.06 },
-          { ...at(0.9), opacity: 1, offset: 0.46 },
-          { ...at(0.9), opacity: 1, offset: 0.54, filter: 'brightness(2)' },
-          { ...at(0.05), opacity: 1, offset: 0.96 },
-          { ...at(0), opacity: 0, offset: 1 },
-        ],
-      };
+      return { cls: 'fx-bullet-reflected', duration: f * 1.9 };
     case 'NEUTRALIZED':
     case 'CLASH_LOST':
-      // Meet the opposing attack half-way and burst.
-      return {
-        duration: FX_TIMING.flight * 1.2,
-        frames: [
-          { ...at(0), opacity: 0, offset: 0 },
-          { ...at(0.08), opacity: 1, offset: 0.1 },
-          { ...at(0.5), opacity: 1, offset: 0.7 },
-          { transform: `translate(-50%, -50%) translate(${d.x * 0.5}px, ${d.y * 0.5}px) scale(1.8)`, opacity: 0, offset: 1 },
-        ],
-      };
+      return { cls: 'fx-bullet-clash', duration: f * 1.2 };
     default:
-      // A hit: fly across and land on the victim's card.
-      return {
-        duration: FX_TIMING.flight * 1.15,
-        frames: [
-          { ...at(0), opacity: 0, offset: 0 },
-          { ...at(0.08), opacity: 1, offset: 0.1 },
-          { ...at(0.92), opacity: 1, offset: 0.85 },
-          { transform: `translate(-50%, -50%) translate(${d.x}px, ${d.y}px) scale(1.5)`, opacity: 0, offset: 1 },
-        ],
-      };
+      return { cls: 'fx-bullet', duration: f * 1.15 };
   }
 }
 
 function Flyer({ p, container }: { p: Projectile; container: RefObject<HTMLElement | null> }) {
   const el = useRef<HTMLSpanElement>(null);
+  const { cls, duration } = flyerMotion(p);
   useLayoutEffect(() => {
     const root = container.current;
     const node = el.current;
@@ -85,13 +50,20 @@ function Flyer({ p, container }: { p: Projectile; container: RefObject<HTMLEleme
     if (!from || !to) return;
     node.style.left = `${from.x}px`;
     node.style.top = `${from.y}px`;
-    if (typeof node.animate !== 'function') return;
-    const { frames, duration } = keyframesFor(p, { x: to.x - from.x, y: to.y - from.y });
-    const anim = node.animate(frames, { duration, easing: 'ease-in-out', fill: 'both' });
-    return () => anim.cancel();
+    node.style.setProperty('--dx', `${to.x - from.x}px`);
+    node.style.setProperty('--dy', `${to.y - from.y}px`);
+    node.style.setProperty('--flip', to.x < from.x ? '-1' : '1'); // a leftward shot mirrors the icon so it points at its target
   }, [p, container]);
   return (
-    <span ref={el} aria-hidden="true" data-testid="fx-projectile" data-end={p.end} className="absolute z-20 text-4xl text-[#50e3ed] opacity-0" style={{ transform: 'translate(-50%, -50%)' }}>
+    <span
+      ref={el}
+      aria-hidden="true"
+      data-testid="fx-projectile"
+      data-end={p.end}
+      data-motion={cls}
+      className={`fx-flyer absolute z-20 text-4xl text-[#50e3ed] opacity-0 ${cls}`}
+      style={{ transform: 'translate3d(-50%, -50%, 0)', '--dx': '0px', '--dy': '0px', '--dur': `${duration}ms` } as CSSProperties}
+    >
       <ActionGlyph emoji={p.emoji} className="size-9" />
     </span>
   );

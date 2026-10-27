@@ -13,7 +13,7 @@ import trophyOutcome from '../assets/modal/trophy-outcome.svg';
 import { avatarFor } from './Avatar';
 import { ModalShell, PrimaryAction } from './ModalShell';
 import { Crumble } from './Crumble';
-import { ActionGlyph } from './ActionIcons';
+import { ActionGlyph, type GlyphFx } from './ActionIcons';
 import { ArenaFX } from './ArenaFX';
 
 const RESULT_STYLE: Record<BattleResult, string> = {
@@ -96,6 +96,18 @@ export function TurnResolutionModal() {
     const hitNow = faceUp && !!react?.hit;
     const clashNow = faceUp && !react?.hit && !!react?.clashEmoji;
     const isYou = c.playerId === session?.playerId;
+    // The weapon that lands on this card's defense (if any) decides which combat effect its icon plays, at the impact tick.
+    const incoming = fxPlan.projectiles.find((x) => x.to === c.playerId && x.clashEmoji);
+    const lit = !playing || !incoming || !!react?.clashEmoji;
+    const fxFor = (): GlyphFx | undefined => {
+      if (!animate || !faceUp) return undefined;
+      if (c.kind === 'CHARGE') return 'gather';
+      if (c.kind !== 'DEFENSE') return undefined;
+      if (c.emoji === '💨') return incoming ? 'avoid' : undefined;
+      return incoming?.end === 'REFLECTED' && c.emoji.startsWith('🪞') ? 'reflect' : 'activate';
+    };
+    // Dodge slides away from the attacker: to the right when the attacker's card sits left of this one, otherwise to the left.
+    const dodgeDir: 1 | -1 = incoming && cards.findIndex((x) => x.playerId === incoming.from) > cards.findIndex((x) => x.playerId === c.playerId) ? -1 : 1;
     const out = c.eliminated && settled;
     return (
       <li
@@ -121,9 +133,9 @@ export function TurnResolutionModal() {
               <span
                 data-testid="bf-action"
                 aria-hidden="true"
-                className={`inline-flex items-center justify-center text-[38px] leading-none text-[#50e3ed] ${out ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
+                className={`inline-flex items-center justify-center text-[38px] leading-none text-[#50e3ed] ${out ? 'grayscale' : ''} ${animate && faceUp && c.kind !== 'DEFENSE' ? 'anim-fx-action' : ''}`}
               >
-                {faceUp ? <ActionGlyph emoji={c.emoji} trigger={!playing || !fxPlan.projectiles.some((x) => x.to === c.playerId && x.clashEmoji) || !!react?.clashEmoji} className="size-[clamp(40px,9vw,56px)]" /> : '❔'}
+                {faceUp ? <ActionGlyph emoji={c.emoji} trigger={lit} fx={fxFor()} dir={dodgeDir} className="size-[clamp(40px,9vw,56px)]" /> : '❔'}
               </span>
             </Crumble>
           </span>

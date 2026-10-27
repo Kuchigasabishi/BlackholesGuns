@@ -136,43 +136,164 @@ body {
 /* In-line arena animations (player cards). Finite except the Charge pulse, which lasts only while the
    action is revealed. Reduced motion disables every animation (rules above); the cards still show the finished picture. */
 @keyframes fx-action-in {
-  0% { transform: scale(0) rotate(-20deg); opacity: 0; }
-  60% { transform: scale(1.35) rotate(6deg); opacity: 1; }
-  100% { transform: scale(1) rotate(0); opacity: 1; }
+  0% { transform: scale3d(0, 0, 1) rotate(-20deg); opacity: 0; }
+  60% { transform: scale3d(1.35, 1.35, 1) rotate(6deg); opacity: 1; }
+  100% { transform: scale3d(1, 1, 1) rotate(0); opacity: 1; }
 }
-@keyframes fx-charge-pulse {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(255, 213, 77, 0)); }
-  50% { transform: scale(1.3); filter: drop-shadow(0 0 14px rgba(255, 213, 77, 0.95)); }
-}
+/* A hit: 300 ms shake at the moment of impact (translate3d keeps it on the compositor). */
 @keyframes fx-hit-shake {
-  0%, 100% { transform: translateX(0); }
-  15% { transform: translateX(-10px) rotate(-1.5deg); }
-  30% { transform: translateX(9px) rotate(1.5deg); }
-  45% { transform: translateX(-7px); }
-  60% { transform: translateX(6px); }
-  80% { transform: translateX(-3px); }
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  15% { transform: translate3d(-10px, 0, 0) rotate(-1.5deg); }
+  30% { transform: translate3d(9px, 0, 0) rotate(1.5deg); }
+  45% { transform: translate3d(-7px, 0, 0); }
+  60% { transform: translate3d(6px, 0, 0); }
+  80% { transform: translate3d(-3px, 0, 0); }
 }
 @keyframes fx-damage-flash {
-  0% { opacity: 0; transform: scale(0.6); }
-  25% { opacity: 1; transform: scale(1.15); }
-  100% { opacity: 0.35; transform: scale(1); }
+  0% { opacity: 0; transform: scale3d(0.6, 0.6, 1); }
+  25% { opacity: 1; transform: scale3d(1.15, 1.15, 1); }
+  100% { opacity: 0.35; transform: scale3d(1, 1, 1); }
 }
 @keyframes fx-clash-pop {
-  0% { transform: scale(0.4); opacity: 0; filter: brightness(1); }
-  40% { transform: scale(1.7); opacity: 1; filter: brightness(2.4) drop-shadow(0 0 22px #fff); }
-  100% { transform: scale(1.1); opacity: 0.95; filter: brightness(1); }
+  0% { transform: scale3d(0.4, 0.4, 1); opacity: 0; }
+  40% { transform: scale3d(1.7, 1.7, 1); opacity: 1; }
+  100% { transform: scale3d(1.1, 1.1, 1); opacity: 0.95; }
 }
 @keyframes fx-card-pop {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.1); box-shadow: 0 0 26px rgba(255, 255, 255, 0.9); }
-  100% { transform: scale(1); }
+  0% { transform: scale3d(1, 1, 1); }
+  40% { transform: scale3d(1.1, 1.1, 1); box-shadow: 0 0 26px rgba(255, 255, 255, 0.9); }
+  100% { transform: scale3d(1, 1, 1); }
 }
 .anim-fx-action { animation: fx-action-in 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
-.anim-fx-charge { animation: fx-action-in 420ms ease-out both, fx-charge-pulse 900ms ease-in-out 420ms infinite; }
-.anim-fx-hit { animation: fx-hit-shake 500ms ease-in-out both; }
+.anim-fx-hit { animation: fx-hit-shake 300ms ease-in-out both; }
 .anim-fx-damage { animation: fx-damage-flash 600ms ease-out both; }
 .anim-fx-clash { animation: fx-clash-pop 650ms ease-out both; }
 .anim-fx-clash-card { animation: fx-card-pop 520ms ease-out both; }
+
+/* ---- Combat choreography for the Figma action icons (Turn Resolution modal) -----------------------------------
+   Every motion is a transform / opacity change written with translate3d / scale3d / rotate3d, so it runs on the
+   compositor (60 fps on phones, no layout or paint). Projectile durations are set inline from FX_TIMING (--dur) so the
+   impact lands on the schedule's impact tick; the defense icons start their animation at that same tick.
+   Reduced motion: the rules above remove every animation, and the timeline does not play at all. */
+
+/* Projectiles. --dx / --dy are the attacker-to-target vector (px), --flip mirrors the icon for leftward shots. */
+.fx-flyer { will-change: transform, opacity; backface-visibility: hidden; }
+
+/* GUN: a bullet travelling straight at the target, then bursting on its card. */
+@keyframes fireBullet {
+  0% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale3d(calc(var(--flip, 1) * 0.7), 0.7, 1); }
+  10% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.08), calc(-50% + var(--dy) * 0.08), 0) scale3d(var(--flip, 1), 1, 1); }
+  85% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.92), calc(-50% + var(--dy) * 0.92), 0) scale3d(var(--flip, 1), 1, 1); }
+  100% { opacity: 0; transform: translate3d(calc(-50% + var(--dx)), calc(-50% + var(--dy)), 0) scale3d(calc(var(--flip, 1) * 1.5), 1.5, 1); }
+}
+/* A blocked shot: reaches the defense, pops, then ricochets away and fades. */
+@keyframes fireBulletBlocked {
+  0% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale3d(calc(var(--flip, 1) * 0.7), 0.7, 1); }
+  8% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.08), calc(-50% + var(--dy) * 0.08), 0) scale3d(var(--flip, 1), 1, 1); }
+  66% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.84), calc(-50% + var(--dy) * 0.84), 0) scale3d(calc(var(--flip, 1) * 1.4), 1.4, 1); }
+  100% { opacity: 0; transform: translate3d(calc(-50% + var(--dx) * 0.7 + 18px), calc(-50% + var(--dy) * 0.7 - 46px), 0) rotate(220deg) scale3d(0.8, 0.8, 1); }
+}
+/* A reflected shot: bounces off the mirror (flash pop) and flies back at its sender. */
+@keyframes fireBulletReflected {
+  0% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale3d(calc(var(--flip, 1) * 0.7), 0.7, 1); }
+  6% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.08), calc(-50% + var(--dy) * 0.08), 0) scale3d(var(--flip, 1), 1, 1); }
+  46% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.9), calc(-50% + var(--dy) * 0.9), 0) scale3d(var(--flip, 1), 1, 1); }
+  54% { opacity: 0.6; transform: translate3d(calc(-50% + var(--dx) * 0.9), calc(-50% + var(--dy) * 0.9), 0) scale3d(calc(var(--flip, 1) * 1.6), 1.6, 1); }
+  96% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.05), calc(-50% + var(--dy) * 0.05), 0) scale3d(calc(var(--flip, 1) * -1), 1, 1); }
+  100% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale3d(calc(var(--flip, 1) * -1), 1, 1); }
+}
+/* Two attacks meeting: burst half-way. */
+@keyframes fireBulletClash {
+  0% { opacity: 0; transform: translate3d(-50%, -50%, 0) scale3d(calc(var(--flip, 1) * 0.7), 0.7, 1); }
+  10% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.08), calc(-50% + var(--dy) * 0.08), 0) scale3d(var(--flip, 1), 1, 1); }
+  70% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.5), calc(-50% + var(--dy) * 0.5), 0) scale3d(var(--flip, 1), 1, 1); }
+  100% { opacity: 0; transform: translate3d(calc(-50% + var(--dx) * 0.5), calc(-50% + var(--dy) * 0.5), 0) scale3d(1.8, 1.8, 1); }
+}
+/* KNIFE: wind up, dash at the target, slash on arrival (angular rotation), then snap back to the origin. */
+@keyframes meleeStrike {
+  0% { opacity: 0; transform: translate3d(-50%, -50%, 0) rotate(0) scale3d(0.8, 0.8, 1); }
+  12% { opacity: 1; transform: translate3d(calc(-50% - var(--dx) * 0.04), calc(-50% - var(--dy) * 0.04), 0) rotate(calc(-35deg * var(--flip, 1))) scale3d(1, 1, 1); }
+  45% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.9), calc(-50% + var(--dy) * 0.9), 0) rotate(calc(-20deg * var(--flip, 1))) scale3d(1.1, 1.1, 1); }
+  60% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.97), calc(-50% + var(--dy) * 0.97), 0) rotate(calc(75deg * var(--flip, 1))) scale3d(1.3, 1.3, 1); }
+  72% { opacity: 1; transform: translate3d(calc(-50% + var(--dx) * 0.95), calc(-50% + var(--dy) * 0.95), 0) rotate(calc(80deg * var(--flip, 1))) scale3d(1.2, 1.2, 1); }
+  100% { opacity: 0; transform: translate3d(-50%, -50%, 0) rotate(0) scale3d(0.9, 0.9, 1); }
+}
+.fx-bullet { animation: fireBullet var(--dur, 750ms) ease-in-out both; }
+.fx-bullet-blocked { animation: fireBulletBlocked var(--dur, 975ms) ease-in-out both; }
+.fx-bullet-reflected { animation: fireBulletReflected var(--dur, 1235ms) ease-in-out both; }
+.fx-bullet-clash { animation: fireBulletClash var(--dur, 780ms) ease-in-out both; }
+.fx-melee { animation: meleeStrike var(--dur, 1050ms) cubic-bezier(0.3, 0.7, 0.3, 1) both; }
+
+/* Icon glyph effects. They start the moment the class is applied (the modal applies it at the impact tick). */
+[data-glyph] { position: relative; isolation: isolate; }
+[data-glyph]::before {
+  content: '';
+  position: absolute;
+  inset: -22%;
+  z-index: -1;
+  border-radius: 9999px;
+  background: radial-gradient(circle, currentColor 0%, transparent 62%);
+  opacity: 0;
+  pointer-events: none;
+}
+/* SHIELD / REFLECT: elastic spring pop (0 -> 1.1 -> 1) with an energetic opacity flash. */
+@keyframes activateDefenses {
+  0% { transform: scale3d(0, 0, 1); opacity: 0; }
+  40% { transform: scale3d(1.18, 1.18, 1); opacity: 1; }
+  55% { transform: scale3d(1.1, 1.1, 1); opacity: 0.6; }
+  75% { transform: scale3d(0.96, 0.96, 1); opacity: 1; }
+  100% { transform: scale3d(1, 1, 1); opacity: 1; }
+}
+@keyframes activateFlash {
+  0% { opacity: 0; }
+  30% { opacity: 0.75; }
+  100% { opacity: 0; }
+}
+.fx-activate { animation: activateDefenses 520ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+.fx-activate::before { animation: activateFlash 520ms ease-out both; }
+/* REFLECT outcome: the mirror flips and flashes as the weapon lands, and a micro-particle streak is sent back. */
+@keyframes reflectBounce {
+  0% { transform: perspective(240px) rotate3d(0, 1, 0, 0deg) scale3d(1, 1, 1); opacity: 1; }
+  45% { transform: perspective(240px) rotate3d(0, 1, 0, 180deg) scale3d(1.2, 1.2, 1); opacity: 0.55; }
+  100% { transform: perspective(240px) rotate3d(0, 1, 0, 360deg) scale3d(1, 1, 1); opacity: 1; }
+}
+@keyframes reflectParticle {
+  0% { opacity: 0; transform: translate3d(0, 0, 0) rotate(-24deg) scale3d(0.4, 1, 1); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(-46px, -18px, 0) rotate(-24deg) scale3d(1, 1, 1); }
+}
+.fx-reflect-bounce { animation: reflectBounce 480ms ease-in-out both; }
+.fx-reflect::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, currentColor);
+  pointer-events: none;
+  animation: reflectParticle 480ms ease-out both;
+}
+/* CHARGE: a continuous breathing pulse with a neon glow shimmer. */
+@keyframes gatherEnergy {
+  0%, 100% { transform: scale3d(1, 1, 1); }
+  50% { transform: scale3d(1.14, 1.14, 1); }
+}
+@keyframes gatherGlow {
+  0%, 100% { opacity: 0.1; transform: scale3d(0.9, 0.9, 1); }
+  50% { opacity: 0.6; transform: scale3d(1.15, 1.15, 1); }
+}
+.fx-gather { animation: gatherEnergy 1500ms ease-in-out infinite; }
+.fx-gather::before { animation: gatherGlow 1500ms ease-in-out infinite; }
+/* DODGE: a rapid slide away from the incoming attack path (--dir is +1 / -1), fading out and back in. */
+@keyframes avoidManeuver {
+  0% { transform: translate3d(0, 0, 0) skewX(0); opacity: 1; }
+  28% { transform: translate3d(calc(var(--dir, 1) * 30px), 0, 0) skewX(calc(var(--dir, 1) * -14deg)); opacity: 0.3; }
+  60% { transform: translate3d(calc(var(--dir, 1) * 18px), 0, 0) skewX(calc(var(--dir, 1) * -8deg)); opacity: 0.7; }
+  100% { transform: translate3d(0, 0, 0) skewX(0); opacity: 1; }
+}
+.fx-avoid { animation: avoidManeuver 560ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 
 /* Tier power-up glow for affordable weapons / Reflects (tiers 1-5).
    The glow lives on a pseudo-element and only animates opacity, so it never changes the button's

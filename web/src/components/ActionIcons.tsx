@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 
 /**
  * The six cyberpunk action icons from the Figma "Action icons" frames, rebuilt as inline vector geometry.
@@ -205,18 +205,33 @@ export function ActionIcon({ name, className = 'size-full' }: { name: ActionIcon
   );
 }
 
+/** The combat effect a glyph plays (CSS in index.css); each one starts the moment it is applied. */
+export type GlyphFx = 'gather' | 'activate' | 'reflect' | 'avoid';
+
 /**
  * An action's symbol: the Figma vector icon for Charge, Dodge, Shield, Gun, Knife and Reflect (the Reflect tier shows as a
- * small ×n), the plain emoji for the remaining weapons. While `trigger` is false (a defense waiting for the projectile to
- * land) the icon is held back at low opacity; it lights up at the impact moment.
+ * small x n), the plain emoji for the remaining weapons. While `trigger` is false (a defense waiting for the projectile to
+ * land) the icon is held back at low opacity; once it is true the icon lights up and plays `fx`:
+ *  - gather: Charge breathes with a neon glow shimmer (loops).
+ *  - activate: Shield / Reflect spring-pop with an opacity flash.
+ *  - reflect: activate, plus the mirror flips and a micro-particle streak is sent back.
+ *  - avoid: Dodge slides away from the attack (`dir` is +1 / -1, the side it slides to).
  */
-export function ActionGlyph({ emoji, trigger = true, className = 'size-full' }: { emoji: string; trigger?: boolean; className?: string }) {
+export function ActionGlyph({ emoji, trigger = true, fx, dir = 1, className = 'size-full' }: { emoji: string; trigger?: boolean; fx?: GlyphFx | undefined; dir?: 1 | -1; className?: string }) {
   const name = iconNameForEmoji(emoji);
   if (!name) return <>{emoji}</>;
   const times = name === 'REFLECT' ? emoji.split('×')[1] : undefined;
+  const play = trigger ? fx : undefined;
+  const outer = play === 'gather' ? 'fx-gather' : play === 'activate' ? 'fx-activate' : play === 'reflect' ? 'fx-activate fx-reflect' : play === 'avoid' ? 'fx-avoid' : '';
   return (
-    <span data-glyph={name} data-lit={trigger} className={`inline-flex items-center justify-center gap-1 transition-opacity duration-150 ${trigger ? '' : 'opacity-30'}`}>
-      <ActionIcon name={name} className={className} />
+    <span
+      data-glyph={name}
+      data-lit={trigger}
+      data-fx={play}
+      style={play === 'avoid' ? ({ '--dir': dir } as CSSProperties) : undefined}
+      className={`inline-flex items-center justify-center gap-1 ${trigger ? '' : 'opacity-30'} ${outer}`}
+    >
+      <ActionIcon name={name} className={`${className} ${play === 'reflect' ? 'fx-reflect-bounce' : ''}`} />
       {times && <span className="font-plex text-[0.35em] font-bold leading-none">×{times}</span>}
     </span>
   );

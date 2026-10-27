@@ -116,8 +116,8 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     expect(within(dialog).getByTestId('bf-p1').textContent).toContain('❔'); // the attacker is revealed after the lead-in
     advance(FX_TIMING.lead);
     expect(within(dialog).getByTestId('bf-p1').textContent).toContain('🔫');
-    expect(within(dialog).getByTestId('bf-p2').textContent).toContain('🛡️');
-    expect(within(dialog).getByTestId('bf-p3').textContent).toContain('⚡');
+    expect(within(dialog).getByTestId('bf-p2').querySelector('[data-lottie="Shield"]')).toBeTruthy(); // Lottie Shield, not the emoji
+    expect(within(dialog).getByTestId('bf-p3').querySelector('[data-lottie="Charge"]')).toBeTruthy();
     expect(within(dialog).getAllByRole('button')).toHaveLength(1);
     expect(screen.getByTestId('tr-next').textContent).toContain('Next turn');
     expect(document.activeElement).toBe(screen.getByTestId('tr-next'));
@@ -152,7 +152,7 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     expect(screen.getByTestId('turn-resolution').className).not.toContain('anim-shake');
 
     advance(FX_TIMING.flight - FX_TIMING.shake); // the shot lands on the shield
-    expect(screen.getByTestId('clash-p2').textContent).toBe('🛡️');
+    expect(screen.getByTestId('clash-p2').querySelector('[data-lottie="Shield"]')).toBeTruthy();
     expect(card('p2').getAttribute('data-fx')).toBe('clash');
     expect(screen.queryByTestId('bf-results-p2')).toBeNull(); // text results wait for the sequence
 
@@ -270,5 +270,51 @@ describe('series result dialog', () => {
     act(() => screen.getByTestId('sr-return').click());
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(store.getState().game).toBeNull();
+  });
+});
+
+describe('Lottie animations replace the Charge / Dodge / Shield emoji', () => {
+  const lottie = () => (globalThis as unknown as { __lottie: { src: string; cmd: string }[] }).__lottie;
+  const cmds = (name: string) => lottie().filter((c) => c.src.endsWith(`/${name}.json`)).map((c) => c.cmd);
+
+  it('a Shield waits on its first frame and starts at the exact moment the projectile lands; Charge loops from the start', () => {
+    lottie().length = 0;
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
+    const shield = () => screen.getByTestId('bf-p2').querySelector('[data-lottie="Shield"]')!;
+    expect(shield().getAttribute('data-mode')).toBe('once');
+    expect(shield().getAttribute('data-playing')).toBe('false');
+    expect(cmds('Shield')).not.toContain('play'); // parked before the clash
+    expect(screen.getByTestId('bf-p3').querySelector('[data-lottie="Charge"]')!.getAttribute('data-playing')).toBe('true'); // pulsing in place
+    expect(cmds('Charge')).toContain('play');
+    advance(FX_TIMING.lead + FX_TIMING.flight - 1);
+    expect(cmds('Shield')).not.toContain('play');
+    advance(1); // impact
+    expect(shield().getAttribute('data-playing')).toBe('true');
+    expect(cmds('Shield')).toContain('play');
+  });
+
+  it('with no incoming attack, Dodge / Shield play straight away; sources are the three files in public/animations', () => {
+    lottie().length = 0;
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: CHARGE, p2: defend('DODGE'), p3: CHARGE });
+    expect(screen.getByTestId('bf-p2').querySelector('[data-lottie="Dodge"]')!.getAttribute('data-playing')).toBe('true');
+    const srcs = new Set(lottie().map((c) => c.src));
+    expect([...srcs].every((x) => /^\/animations\/(Charge|Dodge|Shield)\.json$/.test(x))).toBe(true);
+  });
+
+  it('reduced motion parks them on a still frame', () => {
+    localStorage.setItem('bng.reducedMotion', '1');
+    lottie().length = 0;
+    const game = three();
+    const store = liveStore(game);
+    mount(<TurnResolutionModal />, store);
+    deliver(store, game, { p1: CHARGE, p2: defend('SHIELD'), p3: CHARGE });
+    expect(screen.getByTestId('bf-p3').querySelector('[data-lottie="Charge"]')!.getAttribute('data-playing')).toBe('false');
+    expect(cmds('Charge')).not.toContain('play');
   });
 });

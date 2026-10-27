@@ -13,6 +13,7 @@ import trophyOutcome from '../assets/modal/trophy-outcome.svg';
 import { avatarFor } from './Avatar';
 import { ModalShell, PrimaryAction } from './ModalShell';
 import { Crumble } from './Crumble';
+import { ActionGlyph } from './LottieIcon';
 import { ArenaFX } from './ArenaFX';
 
 const RESULT_STYLE: Record<BattleResult, string> = {
@@ -120,9 +121,9 @@ export function TurnResolutionModal() {
               <span
                 data-testid="bf-action"
                 aria-hidden="true"
-                className={`inline-block text-[38px] leading-none ${out ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
+                className={`inline-flex items-center justify-center text-[38px] leading-none ${out ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
               >
-                {faceUp ? c.emoji : '❔'}
+                {faceUp ? <ActionGlyph emoji={c.emoji} trigger={!playing || !fxPlan.projectiles.some((x) => x.to === c.playerId && x.clashEmoji) || !!react?.clashEmoji} className="size-[60px]" /> : '❔'}
               </span>
             </Crumble>
           </span>
@@ -151,7 +152,7 @@ export function TurnResolutionModal() {
         </div>
         {clashNow && (
           <span data-testid={`clash-${c.playerId}`} aria-hidden="true" className="anim-fx-clash pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-6xl">
-            {react?.clashEmoji}
+            <ActionGlyph emoji={react?.clashEmoji ?? ''} trigger className="size-20" />
           </span>
         )}
         {hitNow && (

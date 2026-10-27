@@ -20,6 +20,7 @@ import { useGameState, useSettings, useStore } from '../hooks';
 import type { Choice } from '../net/store';
 import { attackTip, reflectTip, type MatrixTip } from '../format/matrixTip';
 import { audio } from '../audio/AudioManager';
+import { LottieIcon, type LottieName } from './LottieIcon';
 import { INLINE_WEAPON_ICON } from './WeaponIcons';
 import axe from '../assets/ui/axe.svg';
 import battery from '../assets/ui/battery.svg';
@@ -87,6 +88,9 @@ const ICON_SVG: Record<string, string> = {
 
 /** Below the `lg` breakpoint the roster sits above the control panel (single column): the phone / small-tablet layout. */
 export const isStackedLayout = (): boolean => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
+
+/** Charge, Dodge and Shield use the Lottie animations instead of a static icon. */
+const LOTTIE_ACTION: Readonly<Record<string, LottieName>> = { CHARGE: 'Charge', DODGE: 'Dodge', SHIELD: 'Shield' };
 
 const TIERS: readonly { readonly label: string; readonly cost: number; readonly ids: readonly AttackId[]; readonly reflect?: DefenseId }[] = [
   { label: 'TIER 1', cost: 1, ids: ['GUN', 'KNIFE'], reflect: 'REFLECT' },
@@ -215,7 +219,12 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
           selected ? 'bg-gold/15 ring-2 ring-gold' : '',
         ].join(' ')}
       >
-        {INLINE_WEAPON_ICON[id] ? (
+        {LOTTIE_ACTION[id] ? (
+          // Animated Jitter icon (loops). When unaffordable it parks on a still frame and dims with the rest of the button.
+          <span aria-hidden="true" className={`size-8 shrink-0 transition-[filter] ${enabled ? 'group-hover:drop-shadow-[0_0_5px_#50e3ed]' : 'opacity-50 grayscale'}`}>
+            <LottieIcon name={LOTTIE_ACTION[id]!} mode="loop" still={!enabled} className="size-full" />
+          </span>
+        ) : INLINE_WEAPON_ICON[id] ? (
           // Custom inline glyph: draws in currentColor so it follows the button text colour and the dimming below.
           <span aria-hidden="true" className={`size-[18px] shrink-0 transition-[filter] ${enabled ? 'text-[#eef6fa] group-hover:text-[#50e3ed] group-hover:drop-shadow-[0_0_4px_currentColor] group-focus-visible:drop-shadow-[0_0_4px_currentColor]' : 'text-[#91a5b6] opacity-50'}`}>
             {INLINE_WEAPON_ICON[id]()}

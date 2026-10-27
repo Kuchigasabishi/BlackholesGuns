@@ -1240,3 +1240,27 @@ describe('Custom inline weapon icons', () => {
     expect(button('GUN').querySelector('svg')!.parentElement!.className).toContain('group-hover:drop-shadow');
   });
 });
+
+describe('Lottie icons on the Charge / Dodge / Shield buttons', () => {
+  it('each button loops its animation when affordable and parks it, dimmed, when not', () => {
+    mount(<ControlPanel />, inGame(2, 0).store);
+    for (const [id, name] of [['DODGE', 'Dodge'], ['SHIELD', 'Shield'], ['CHARGE', 'Charge']] as const) {
+      const icon = button(id).querySelector(`[data-lottie="${name}"]`)!;
+      expect(icon, id).toBeTruthy();
+      expect(icon.getAttribute('data-mode')).toBe('loop');
+      expect(icon.getAttribute('data-playing')).toBe('true');
+      expect(button(id).querySelector('img')).toBeNull();
+    }
+    cleanup();
+    // Sudden Death disables every defense: the Shield animation parks on a still frame and dims with its button
+    mount(<ControlPanel />, stubStore(clientStateFor(withStreak(newGame(2), 10, 'SUDDEN_DEATH'), 'p1')));
+    const icon = button('SHIELD').querySelector('[data-lottie="Shield"]')!;
+    expect(icon.getAttribute('data-playing')).toBe('false');
+    expect(icon.parentElement!.className).toContain('opacity-50');
+  });
+
+  it('weapons keep their own icons', () => {
+    mount(<ControlPanel />, inGame(2, 5).store);
+    expect(button('GUN').querySelector('[data-lottie]')).toBeNull();
+  });
+});

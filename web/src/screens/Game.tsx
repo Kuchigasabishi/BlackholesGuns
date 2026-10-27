@@ -10,6 +10,7 @@ import volumeIcon from '../assets/ui/volume-2.svg';
 import xIcon from '../assets/ui/x.svg';
 import { ArenaScene, SystemFooter } from '../components/ArenaScene';
 import { Avatar } from '../components/Avatar';
+import { ActionGlyph } from '../components/LottieIcon';
 import { Crumble, useCrumble } from '../components/Crumble';
 import { LockShader } from '../components/LockShader';
 import { ControlPanel } from '../components/ControlPanel';
@@ -324,7 +325,7 @@ function RosterCard({ id, seat, state }: { id: string; seat: number; state: Clie
       )}
       {emoji && (
         <span data-testid={`action-emoji-${id}`} aria-hidden="true" className="pointer-events-none absolute right-1 top-1 z-10 text-4xl leading-none drop-shadow-[0_0_8px_rgba(0,255,255,0.7)]">
-          {emoji}
+          <ActionGlyph emoji={emoji} className="size-10" />
         </span>
       )}
       <LockShader active={locked} playerId={id} />

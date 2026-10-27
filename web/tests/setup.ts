@@ -75,29 +75,3 @@ vi.mock('howler', () => {
   }
   return { Howl, Howler: { volume: vi.fn(), mute: vi.fn() } };
 });
-
-/**
- * lottie-web needs a real SVG / canvas engine. Tests get a stand-in that mounts a marker element, reports ready, and records
- * every command: `globalThis.__lottie` lists { src, cmd } entries in order.
- */
-export interface LottieCommand {
-  src: string;
-  cmd: string;
-}
-
-vi.mock('lottie-react', async () => {
-  const { useEffect } = await import('react');
-  const { createElement } = await import('react');
-  const log: LottieCommand[] = [];
-  (globalThis as unknown as { __lottie: LottieCommand[] }).__lottie = log;
-  function LottieSvg(props: { src: string; loop?: boolean; autoplay?: boolean; className?: string; lottieRef?: { current: unknown }; subscriptions?: { ready?: () => void } }) {
-    const { src, loop, autoplay, lottieRef, subscriptions } = props;
-    useEffect(() => {
-      const rec = (cmd: string) => log.push({ src, cmd });
-      if (lottieRef) lottieRef.current = { play: () => rec('play'), pause: () => rec('pause'), stop: () => rec('stop'), seek: (t: unknown) => rec(`seek:${JSON.stringify(t)}`) };
-      subscriptions?.ready?.();
-    }, []);
-    return createElement('div', { 'data-lottie-src': src, 'data-loop': String(!!loop), 'data-autoplay': String(!!autoplay), className: props.className });
-  }
-  return { LottieSvg };
-});

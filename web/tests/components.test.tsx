@@ -1206,9 +1206,9 @@ describe('Game Mode selector in the lobby', () => {
 });
 
 describe('Custom inline weapon icons', () => {
-  const INLINE = ['GUN', 'KNIFE', 'GRENADE', 'BOMB', 'MJOLNIR', 'REFLECT', 'DOUBLE_REFLECT', 'TRIPLE_REFLECT', 'QUAD_REFLECT'];
+  const INLINE = ['GRENADE', 'BOMB', 'MJOLNIR'];
 
-  it('Gun, Knife, Grenade, C4, Mjolnir and the four Reflects use inline currentColor SVGs in one shared 24x24 box', () => {
+  it('Grenade, C4 and Mjolnir use inline currentColor SVGs in one shared 24x24 box', () => {
     mount(<ControlPanel />, inGame(2, 5).store);
     for (const id of INLINE) {
       const svg = button(id).querySelector(`svg[data-weapon-icon="${id}"]`)!;
@@ -1221,46 +1221,38 @@ describe('Custom inline weapon icons', () => {
     for (const id of ['GATLING_GUN', 'KATANA']) expect(button(id).querySelector('svg[data-weapon-icon]'), id).toBeNull();
   });
 
-  it('Reflect tiers stack 1, 2, 3 and 4 mirror frames, the front one carrying gloss lines', () => {
-    mount(<ControlPanel />, inGame(2, 5).store);
-    const mirrors = (id: string) => {
-      const svg = button(id).querySelector('svg')!;
-      return { frames: svg.querySelectorAll('rect').length + svg.querySelectorAll('path:not(:last-child)').length, backs: svg.querySelectorAll('path').length - 1 };
-    };
-    expect([1, 2, 3, 4].map((n, i) => mirrors(['REFLECT', 'DOUBLE_REFLECT', 'TRIPLE_REFLECT', 'QUAD_REFLECT'][i]!).backs + 1)).toEqual([1, 2, 3, 4]);
-    expect(button('QUAD_REFLECT').querySelectorAll('svg rect')).toHaveLength(1); // one full front frame, three layered behind it
-  });
-
   it('dims with the button when unaffordable, and glows on hover/focus when affordable', () => {
     mount(<ControlPanel />, inGame(2, 0).store);
     expect(button('MJOLNIR').querySelector('svg')!.parentElement!.className).toContain('opacity-50');
     cleanup();
     mount(<ControlPanel />, inGame(2, 5).store);
     expect(button('GUN').className).toContain('group');
-    expect(button('GUN').querySelector('svg')!.parentElement!.className).toContain('group-hover:drop-shadow');
+    expect(button('GUN').querySelector('[data-action-glyph]')!.className).toContain('group-hover:drop-shadow');
   });
 });
 
-describe('Lottie icons on the Charge / Dodge / Shield buttons', () => {
-  it('each button loops its animation when affordable and parks it, dimmed, when not', () => {
+describe('Figma vector icons on the control panel buttons', () => {
+  const glyph = (id: string) => button(id).querySelector('[data-action-glyph]')!;
+
+  it('every Figma action shows its inline vector icon, bright when affordable and dimmed when not', () => {
     mount(<ControlPanel />, inGame(2, 0).store);
-    for (const [id, name] of [['DODGE', 'Dodge'], ['SHIELD', 'Shield'], ['CHARGE', 'Charge']] as const) {
-      const icon = button(id).querySelector(`[data-lottie="${name}"]`)!;
-      expect(icon, id).toBeTruthy();
-      expect(icon.getAttribute('data-mode')).toBe('loop');
-      expect(icon.getAttribute('data-playing')).toBe('true');
-      expect(button(id).querySelector('img')).toBeNull();
+    for (const [id, name] of [['DODGE', 'DODGE'], ['SHIELD', 'SHIELD'], ['CHARGE', 'CHARGE'], ['GUN', 'GUN'], ['KNIFE', 'KNIFE'], ['REFLECT', 'REFLECT'], ['DOUBLE_REFLECT', 'REFLECT'], ['QUAD_REFLECT', 'REFLECT']] as const) {
+      expect(glyph(id).querySelector(`[data-action-icon="${name}"]`), id).toBeTruthy();
+      expect(button(id).querySelector('img:not([data-lock-icon])'), id).toBeNull();
     }
+    expect(glyph('GUN').className).toContain('opacity-50'); // 0 charge: Gun costs 1
+    expect(glyph('DODGE').className).not.toContain('opacity-50');
     cleanup();
-    // Sudden Death disables every defense: the Shield animation parks on a still frame and dims with its button
+    mount(<ControlPanel />, inGame(2, 5).store);
+    expect(glyph('GUN').className).toContain('group-hover:drop-shadow');
+    // Sudden Death disables every defense: the Shield icon dims with its button
+    cleanup();
     mount(<ControlPanel />, stubStore(clientStateFor(withStreak(newGame(2), 10, 'SUDDEN_DEATH'), 'p1')));
-    const icon = button('SHIELD').querySelector('[data-lottie="Shield"]')!;
-    expect(icon.getAttribute('data-playing')).toBe('false');
-    expect(icon.parentElement!.className).toContain('opacity-50');
+    expect(glyph('SHIELD').className).toContain('opacity-50');
   });
 
-  it('weapons keep their own icons', () => {
+  it('the heavier weapons keep their own line icons', () => {
     mount(<ControlPanel />, inGame(2, 5).store);
-    expect(button('GUN').querySelector('[data-lottie]')).toBeNull();
+    expect(button('GRENADE').querySelector('[data-action-glyph]')).toBeNull();
   });
 });

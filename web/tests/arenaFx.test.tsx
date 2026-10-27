@@ -115,9 +115,9 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(within(dialog).getByTestId('bf-p1').textContent).toContain('❔'); // the attacker is revealed after the lead-in
     advance(FX_TIMING.lead);
-    expect(within(dialog).getByTestId('bf-p1').textContent).toContain('🔫');
-    expect(within(dialog).getByTestId('bf-p2').querySelector('[data-lottie="Shield"]')).toBeTruthy(); // Lottie Shield, not the emoji
-    expect(within(dialog).getByTestId('bf-p3').querySelector('[data-lottie="Charge"]')).toBeTruthy();
+    expect(within(dialog).getByTestId('bf-p1').querySelector('[data-action-icon="GUN"]')).toBeTruthy();
+    expect(within(dialog).getByTestId('bf-p2').querySelector('[data-action-icon="SHIELD"]')).toBeTruthy(); // vector Shield, not the emoji
+    expect(within(dialog).getByTestId('bf-p3').querySelector('[data-action-icon="CHARGE"]')).toBeTruthy();
     expect(within(dialog).getAllByRole('button')).toHaveLength(1);
     expect(screen.getByTestId('tr-next').textContent).toContain('Next turn');
     expect(document.activeElement).toBe(screen.getByTestId('tr-next'));
@@ -139,11 +139,11 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
 
     advance(FX_TIMING.lead);
     expect(card('p1').getAttribute('data-revealed')).toBe('true');
-    expect(card('p1').textContent).toContain('🔫');
+    expect(card('p1').querySelector('[data-action-icon="GUN"]')).toBeTruthy();
     expect(screen.getByTestId('turn-resolution').getAttribute('data-shake')).toBe('1'); // Gun = tier 1
     expect(screen.getByTestId('turn-resolution').className).toContain('anim-shake-t1');
     const shot = screen.getByTestId('fx-projectile');
-    expect(shot.textContent).toBe('🔫');
+    expect(shot.querySelector('[data-action-icon="GUN"]')).toBeTruthy(); // the flying weapon is the vector Gun
     expect(shot.getAttribute('data-end')).toBe('BLOCKED');
     expect(screen.queryByTestId('clash-p2')).toBeNull();
 
@@ -152,7 +152,7 @@ describe('Turn Resolution popup with the emoji clash timeline', () => {
     expect(screen.getByTestId('turn-resolution').className).not.toContain('anim-shake');
 
     advance(FX_TIMING.flight - FX_TIMING.shake); // the shot lands on the shield
-    expect(screen.getByTestId('clash-p2').querySelector('[data-lottie="Shield"]')).toBeTruthy();
+    expect(screen.getByTestId('clash-p2').querySelector('[data-action-icon="SHIELD"]')).toBeTruthy();
     expect(card('p2').getAttribute('data-fx')).toBe('clash');
     expect(screen.queryByTestId('bf-results-p2')).toBeNull(); // text results wait for the sequence
 
@@ -273,48 +273,44 @@ describe('series result dialog', () => {
   });
 });
 
-describe('Lottie animations replace the Charge / Dodge / Shield emoji', () => {
-  const lottie = () => (globalThis as unknown as { __lottie: { src: string; cmd: string }[] }).__lottie;
-  const cmds = (name: string) => lottie().filter((c) => c.src.endsWith(`/${name}.json`)).map((c) => c.cmd);
+describe('Figma vector icons replace the Charge / Dodge / Shield / Gun / Knife / Reflect emoji', () => {
+  const icon = (id: string, name: string) => screen.getByTestId(id).querySelector(`[data-action-icon="${name}"]`);
 
-  it('a Shield waits on its first frame and starts at the exact moment the projectile lands; Charge loops from the start', () => {
-    lottie().length = 0;
+  it('a Shield is held back at low opacity until the projectile lands, then lights up; Charge shows at once', () => {
     const game = three();
     const store = liveStore(game);
     mount(<TurnResolutionModal />, store);
     deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
-    const shield = () => screen.getByTestId('bf-p2').querySelector('[data-lottie="Shield"]')!;
-    expect(shield().getAttribute('data-mode')).toBe('once');
-    expect(shield().getAttribute('data-playing')).toBe('false');
-    expect(cmds('Shield')).not.toContain('play'); // parked before the clash
-    expect(screen.getByTestId('bf-p3').querySelector('[data-lottie="Charge"]')!.getAttribute('data-playing')).toBe('true'); // pulsing in place
-    expect(cmds('Charge')).toContain('play');
+    const lit = () => screen.getByTestId('bf-p2').querySelector('[data-glyph="SHIELD"]')!.getAttribute('data-lit');
+    expect(icon('bf-p2', 'SHIELD')).toBeTruthy();
+    expect(lit()).toBe('false');
+    expect(screen.getByTestId('bf-p3').querySelector('[data-glyph="CHARGE"]')!.getAttribute('data-lit')).toBe('true');
     advance(FX_TIMING.lead + FX_TIMING.flight - 1);
-    expect(cmds('Shield')).not.toContain('play');
+    expect(lit()).toBe('false');
     advance(1); // impact
-    expect(shield().getAttribute('data-playing')).toBe('true');
-    expect(cmds('Shield')).toContain('play');
+    expect(lit()).toBe('true');
   });
 
-  it('with no incoming attack, Dodge / Shield play straight away; sources are the three files in public/animations', () => {
-    lottie().length = 0;
+  it('with no incoming attack a Dodge is lit straight away, and the Gun / Knife / Reflect glyphs are vectors too', () => {
     const game = three();
     const store = liveStore(game);
     mount(<TurnResolutionModal />, store);
-    deliver(store, game, { p1: CHARGE, p2: defend('DODGE'), p3: CHARGE });
-    expect(screen.getByTestId('bf-p2').querySelector('[data-lottie="Dodge"]')!.getAttribute('data-playing')).toBe('true');
-    const srcs = new Set(lottie().map((c) => c.src));
-    expect([...srcs].every((x) => /^\/animations\/(Charge|Dodge|Shield)\.json$/.test(x))).toBe(true);
+    deliver(store, game, { p1: attack('KNIFE', 'p3'), p2: defend('DODGE'), p3: defend('REFLECT') });
+    advance(FX_TIMING.lead);
+    expect(screen.getByTestId('bf-p2').querySelector('[data-glyph="DODGE"]')!.getAttribute('data-lit')).toBe('true');
+    expect(icon('bf-p1', 'KNIFE')).toBeTruthy();
+    expect(icon('bf-p3', 'REFLECT')).toBeTruthy();
   });
 
-  it('reduced motion parks them on a still frame', () => {
-    localStorage.setItem('bng.reducedMotion', '1');
-    lottie().length = 0;
+  it('every icon draws in currentColor so the theme colour and dimming apply', () => {
     const game = three();
     const store = liveStore(game);
     mount(<TurnResolutionModal />, store);
-    deliver(store, game, { p1: CHARGE, p2: defend('SHIELD'), p3: CHARGE });
-    expect(screen.getByTestId('bf-p3').querySelector('[data-lottie="Charge"]')!.getAttribute('data-playing')).toBe('false');
-    expect(cmds('Charge')).not.toContain('play');
+    deliver(store, game, { p1: attack('GUN', 'p2'), p2: defend('SHIELD'), p3: CHARGE });
+    for (const svg of screen.getByTestId('bf-p1').querySelectorAll('[data-action-icon]')) {
+      const paints = [...svg.querySelectorAll('[stroke],[fill]')].flatMap((e) => [e.getAttribute('stroke'), e.getAttribute('fill')]).filter((v) => v && v !== 'none');
+      expect(paints.length).toBeGreaterThan(0);
+      expect(paints.every((v) => v === 'currentColor' || v!.startsWith('var(--icon-cut'))).toBe(true);
+    }
   });
 });

@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 
 /**
- * Inline weapon glyphs drawn for the control panel (24x24 viewBox, 1.5 stroke). They use `currentColor` only, so the
+ * Inline glyphs for the heavier weapons, drawn for the control panel (Gun, Knife and Reflect use the Figma icons in ActionIcons.tsx) (24x24 viewBox, 1.5 stroke). They use `currentColor` only, so the
  * button's text colour and its dimming for unaffordable actions apply to them, and they scale with the 18px icon slot.
  */
 const Svg = ({ name, children }: { name: string; children: React.ReactNode }) => (
@@ -53,65 +53,8 @@ export const MjolnirIcon = () => (
   </Svg>
 );
 
-/** Semi-automatic pistol in profile, barrel to the right: slide with sights, frame, trigger guard and a raked grip. */
-export const GunIcon = () => (
-  <Svg name="GUN">
-    <path d="M3.5 7h16.2a1 1 0 0 1 1 1v3.6H3.5z" />
-    <path d="M20.7 9.3h1.3" />
-    <path d="M4.8 7V5.8h1.7V7M18.2 7V5.9h1.3V7" />
-    <path d="M7.2 8.6v1.6M9 8.6v1.6M10.8 8.6v1.6" />
-    <path d="M3.5 11.6h8.4l1.1 1.1" />
-    <path d="M7.4 11.6l-1.7 8.4h4.3l1.6-6.9" />
-    <path d="M12.6 12.2v1.9a1.5 1.5 0 0 0 1.5 1.5h1.9" />
-    <path d="M12.9 12.6l-.1 1.7" />
-  </Svg>
-);
-
-/** Chef's kitchen knife: flat spine, wide blade tapering to a point, riveted handle scale. */
-export const KitchenKnifeIcon = () => (
-  <Svg name="KNIFE">
-    <path d="M8.6 8.2h12.6L19.4 12c-.9 2.2-3 3.9-5.6 3.9H8.6z" />
-    <path d="M10.4 13.2h5.2" />
-    <rect x="1.8" y="8.4" width="6.8" height="7.2" rx="1.4" />
-    <circle cx="3.9" cy="12" r="0.7" fill="currentColor" />
-    <circle cx="6.5" cy="12" r="0.7" fill="currentColor" />
-  </Svg>
-);
-
-/**
- * Stacked mirror frames: `n` rounded mirrors layered diagonally (1 to 4), the front one carrying diagonal gloss lines.
- * Every count shares the same 24x24 box, so the four Reflect buttons line up.
- */
-export const ReflectIcon = ({ n, name }: { n: 1 | 2 | 3 | 4; name: string }) => {
-  const w = 10.5;
-  const h = 13;
-  const r = 3;
-  const step = n === 1 ? 0 : [0, 0, 5, 3.6, 2.8][n]!;
-  const span = step * (n - 1);
-  const x0 = (24 - w - span) / 2;
-  const y0 = (24 - h - span) / 2;
-  const frames = Array.from({ length: n }, (_, i) => ({ x: x0 + i * step, y: y0 + i * step }));
-  const front = frames[n - 1]!;
-  return (
-    <Svg name={name}>
-      {frames.slice(0, -1).map((f, i) => (
-        // a back frame shows only the edges the next one does not cover (like a fanned stack of cards)
-        <path key={i} d={`M${f.x + w} ${f.y + step}V${f.y + r}a${r} ${r} 0 0 0-${r}-${r}H${f.x + r}a${r} ${r} 0 0 0-${r} ${r}V${f.y + h - r}a${r} ${r} 0 0 0 ${r} ${r}H${f.x + step}`} />
-      ))}
-      <rect x={front.x} y={front.y} width={w} height={h} rx={r} />
-      <path d={`M${front.x + 2.6} ${front.y + h * 0.62}L${front.x + w * 0.62} ${front.y + 2.8}M${front.x + 2.6} ${front.y + h * 0.84}L${front.x + w - 2.8} ${front.y + h * 0.3}`} strokeWidth="1.2" />
-    </Svg>
-  );
-};
-
 export const INLINE_WEAPON_ICON: Readonly<Record<string, () => ReactElement>> = {
-  GUN: GunIcon,
-  KNIFE: KitchenKnifeIcon,
   GRENADE: GrenadeIcon,
   BOMB: C4Icon,
   MJOLNIR: MjolnirIcon,
-  REFLECT: () => <ReflectIcon n={1} name="REFLECT" />,
-  DOUBLE_REFLECT: () => <ReflectIcon n={2} name="DOUBLE_REFLECT" />,
-  TRIPLE_REFLECT: () => <ReflectIcon n={3} name="TRIPLE_REFLECT" />,
-  QUAD_REFLECT: () => <ReflectIcon n={4} name="QUAD_REFLECT" />,
 };

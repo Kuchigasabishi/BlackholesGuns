@@ -20,7 +20,7 @@ import { useGameState, useSettings, useStore } from '../hooks';
 import type { Choice } from '../net/store';
 import { attackTip, reflectTip, type MatrixTip } from '../format/matrixTip';
 import { audio } from '../audio/AudioManager';
-import { LottieIcon, type LottieName } from './LottieIcon';
+import { ActionGlyph, ActionIcon, type ActionIconName } from './ActionIcons';
 import { INLINE_WEAPON_ICON } from './WeaponIcons';
 import axe from '../assets/ui/axe.svg';
 import battery from '../assets/ui/battery.svg';
@@ -89,8 +89,18 @@ const ICON_SVG: Record<string, string> = {
 /** Below the `lg` breakpoint the roster sits above the control panel (single column): the phone / small-tablet layout. */
 export const isStackedLayout = (): boolean => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 1023px)').matches;
 
-/** Charge, Dodge and Shield use the Lottie animations instead of a static icon. */
-const LOTTIE_ACTION: Readonly<Record<string, LottieName>> = { CHARGE: 'Charge', DODGE: 'Dodge', SHIELD: 'Shield' };
+/** Actions drawn with the Figma cyberpunk vector icons (every Reflect tier shares the Reflect icon). */
+const FIGMA_ICON: Readonly<Record<string, ActionIconName>> = {
+  CHARGE: 'CHARGE',
+  DODGE: 'DODGE',
+  SHIELD: 'SHIELD',
+  GUN: 'GUN',
+  KNIFE: 'KNIFE',
+  REFLECT: 'REFLECT',
+  DOUBLE_REFLECT: 'REFLECT',
+  TRIPLE_REFLECT: 'REFLECT',
+  QUAD_REFLECT: 'REFLECT',
+};
 
 const TIERS: readonly { readonly label: string; readonly cost: number; readonly ids: readonly AttackId[]; readonly reflect?: DefenseId }[] = [
   { label: 'TIER 1', cost: 1, ids: ['GUN', 'KNIFE'], reflect: 'REFLECT' },
@@ -154,7 +164,9 @@ function MatrixTooltip({ id, icon, tip }: { id: string; icon: string; tip: Matri
       className="pointer-events-none absolute bottom-full left-0 z-30 mb-2 w-max max-w-[min(18rem,80vw)] rounded-lg border border-edge bg-void/95 px-3 py-2 text-left text-xs normal-case shadow-lg backdrop-blur"
     >
       <span className="block font-bold text-ink">
-        <span aria-hidden="true">{icon} </span>
+        <span aria-hidden="true" className="mr-1 inline-flex size-4 items-center justify-center align-[-3px]">
+          <ActionGlyph emoji={icon} className="size-4" />
+        </span>
         {tip.title}
       </span>
       {tip.lines.map((l) => (
@@ -219,10 +231,10 @@ function ActionButton({ id, kind, row, label, cost, icon, enabled, selected, why
           selected ? 'bg-gold/15 ring-2 ring-gold' : '',
         ].join(' ')}
       >
-        {LOTTIE_ACTION[id] ? (
-          // Animated Jitter icon (loops). When unaffordable it parks on a still frame and dims with the rest of the button.
-          <span aria-hidden="true" className={`size-8 shrink-0 transition-[filter] ${enabled ? 'group-hover:drop-shadow-[0_0_5px_#50e3ed]' : 'opacity-50 grayscale'}`}>
-            <LottieIcon name={LOTTIE_ACTION[id]!} mode="loop" still={!enabled} className="size-full" />
+        {FIGMA_ICON[id] ? (
+          // Figma vector icon: every stroke is currentColor, so the text colour below recolours it and the dimming fades it when unaffordable.
+          <span aria-hidden="true" data-action-glyph={id} className={`flex size-7 shrink-0 items-center justify-center transition-[filter] sm:size-8 ${enabled ? 'text-[#50e3ed] group-hover:drop-shadow-[0_0_5px_currentColor] group-focus-visible:drop-shadow-[0_0_5px_currentColor]' : 'text-[#546b7d] opacity-50'}`}>
+            <ActionIcon name={FIGMA_ICON[id]!} />
           </span>
         ) : INLINE_WEAPON_ICON[id] ? (
           // Custom inline glyph: draws in currentColor so it follows the button text colour and the dimming below.

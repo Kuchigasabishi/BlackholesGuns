@@ -13,7 +13,7 @@ import trophyOutcome from '../assets/modal/trophy-outcome.svg';
 import { avatarFor } from './Avatar';
 import { ModalShell, PrimaryAction } from './ModalShell';
 import { Crumble } from './Crumble';
-import { ActionGlyph } from './LottieIcon';
+import { ActionGlyph } from './ActionIcons';
 import { ArenaFX } from './ArenaFX';
 
 const RESULT_STYLE: Record<BattleResult, string> = {
@@ -121,9 +121,9 @@ export function TurnResolutionModal() {
               <span
                 data-testid="bf-action"
                 aria-hidden="true"
-                className={`inline-flex items-center justify-center text-[38px] leading-none ${out ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
+                className={`inline-flex items-center justify-center text-[38px] leading-none text-[#50e3ed] ${out ? 'grayscale' : ''} ${animate && faceUp ? (c.kind === 'CHARGE' ? 'anim-fx-charge' : 'anim-fx-action') : ''}`}
               >
-                {faceUp ? <ActionGlyph emoji={c.emoji} trigger={!playing || !fxPlan.projectiles.some((x) => x.to === c.playerId && x.clashEmoji) || !!react?.clashEmoji} className="size-[60px]" /> : '❔'}
+                {faceUp ? <ActionGlyph emoji={c.emoji} trigger={!playing || !fxPlan.projectiles.some((x) => x.to === c.playerId && x.clashEmoji) || !!react?.clashEmoji} className="size-[clamp(40px,9vw,56px)]" /> : '❔'}
               </span>
             </Crumble>
           </span>
@@ -151,8 +151,8 @@ export function TurnResolutionModal() {
           </div>
         </div>
         {clashNow && (
-          <span data-testid={`clash-${c.playerId}`} aria-hidden="true" className="anim-fx-clash pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-6xl">
-            <ActionGlyph emoji={react?.clashEmoji ?? ''} trigger className="size-20" />
+          <span data-testid={`clash-${c.playerId}`} aria-hidden="true" className="anim-fx-clash pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-6xl text-[#50e3ed]">
+            <ActionGlyph emoji={react?.clashEmoji ?? ''} trigger className="size-[clamp(56px,14vw,80px)]" />
           </span>
         )}
         {hitNow && (

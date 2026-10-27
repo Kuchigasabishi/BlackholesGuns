@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react';
 import { FX_TIMING, type Projectile } from '../format/fxPlan';
 import { useFx } from '../fx/FxTimeline';
+import { ActionGlyph } from './ActionIcons';
 
 interface Point {
   x: number;
@@ -90,8 +91,8 @@ function Flyer({ p, container }: { p: Projectile; container: RefObject<HTMLEleme
     return () => anim.cancel();
   }, [p, container]);
   return (
-    <span ref={el} aria-hidden="true" data-testid="fx-projectile" data-end={p.end} className="absolute z-20 text-4xl opacity-0" style={{ transform: 'translate(-50%, -50%)' }}>
-      {p.emoji}
+    <span ref={el} aria-hidden="true" data-testid="fx-projectile" data-end={p.end} className="absolute z-20 text-4xl text-[#50e3ed] opacity-0" style={{ transform: 'translate(-50%, -50%)' }}>
+      <ActionGlyph emoji={p.emoji} className="size-9" />
     </span>
   );
 }
